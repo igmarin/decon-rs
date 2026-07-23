@@ -293,7 +293,7 @@ Pocket Flow’s graph becomes an explicit `Pipeline` enum/state machine—**clea
 
 | Miss | Why it matters |
 |------|----------------|
-| **Parity tests vs Python** | Run both on fixture repos; compare abstractions count, mermaid validity, eval score—not exact prose |
+| **Parity tests vs baseline** | Run `decon crawl` on fixture repos; compare dry-run stats against `baseline.json` — not exact prose |
 | **Feature flags** | Ship crawl+dry-run+eval first; LLM stages second |
 | **Don’t rewrite Make away too early** | Keep Make calling the binary for human muscle memory |
 | **Skipping TDD “to go faster”** | You will re-discover every monorepo edge case without tests |
@@ -318,17 +318,29 @@ Pocket Flow’s graph becomes an explicit `Pipeline` enum/state machine—**clea
 - Freeze stage names, checkpoint schema v1, CLI flag list  
 - Extract prompts to files **in Python first** (makes porting trivial)  
 - List fixtures: tiny Python lib, tiny Elixir umbrella, one JS package  
+- Capture parity baseline from Python reference into `tests/fixtures/baseline.json`  
 - Agree engineering bar: **TDD**, **≥ 85% coverage**, **documentation gates** (this section)  
 - Add `CONTRIBUTING.md` skeleton before significant Rust code  
 
+> **Baseline strategy (completed in M0/PR #17).** The frozen `baseline.json`
+> was originally produced by the Python reference's `crawl_local_files`,
+> `monorepo_scope`, and `assess_setup_docs`. A pure-Rust regenerator
+> (`tests/fixtures/regenerate_baseline.rs`, zero dependencies) now reproduces
+> that output byte-for-byte, so no Python toolchain is needed to verify or
+> regenerate the baseline. CI runs `regenerate_baseline --check` on every push
+> to guard against accidental fixture drift. The regenerator is a **standalone
+> reimplementation** of the reference heuristics — it is NOT `decon-crawl`.
+> When `decon-crawl` is built in Phase 1, it is tested against the same frozen
+> `baseline.json`, keeping the parity test non-circular.
+
 ### Phase 1 — Rust skeleton (no LLM)
 
-- `decon crawl` / dry-run plan equal to Python dry-run numbers on fixtures  
+- `decon crawl` / dry-run plan equal to `baseline.json` on fixtures  
 - mermaid sanitize + index builder parity  
-- setup assessment pure logic parity  
+- setup assessment pure logic parity (verified against `baseline.json` setup scores)  
 - `decon eval` port  
 
-**Exit criteria:** dry-run stats match Python ± small deltas; eval works on existing `output/` samples; **≥ 85% coverage** on core/crawl; TDD used for budget/scope/mermaid; rustdoc on public API; CONTRIBUTING describes the test workflow.
+**Exit criteria:** dry-run stats match `baseline.json` exactly; eval works on existing `output/` samples; **≥ 85% coverage** on core/crawl; TDD used for budget/scope/mermaid; rustdoc on public API; CONTRIBUTING describes the test workflow.
 
 ### Phase 2 — LLM identify only
 
@@ -451,7 +463,7 @@ Coverage is a **floor**, not the goal—but it is a **gate**.
 
 - Mutation testing later (optional, `cargo-mutants` on `decon-core`)  
 - Eval score thresholds on fixture tutorials  
-- Parity tests vs Python on dry-run counts for frozen fixtures  
+- Parity tests vs `baseline.json` on dry-run counts for frozen fixtures  
 
 ### 8.4 Documentation (required, not optional)
 
@@ -477,7 +489,7 @@ Documentation ships **with** the binary, not after.
 | **CONTRIBUTING.md** | TDD workflow, coverage gate, how to run tests |
 | **Module-level rustdoc** | All public items in `decon-core` / `decon-pipeline` |
 | **Prompt catalog** | What each prompt is for; input/output contract |
-| **Fixture guide** | How to add a tiny repo fixture + expected dry-run stats |
+| **Fixture guide** | How to add a tiny repo fixture + expected dry-run stats (`tests/fixtures/README.md`) |
 
 #### Documentation gates (CI)
 
@@ -563,7 +575,7 @@ fmt → clippy -D warnings → test → llvm-cov (≥85%) → doc →
 | Install time for a new user | &lt; 2 minutes to first dry-run |
 | Dry-run on 2k-file monorepo | seconds–low minutes, clear plan |
 | Resume after kill mid-relationships | zero re-identify if checkpoint valid |
-| Eval score on fixtures | no regression vs Python baseline |
+| Eval score on fixtures | no regression vs `baseline.json` |
 | Full generate UX | progress stages + call counts + checkpoint path always visible |
 | “Works with empty PROVIDER make bug” class | impossible by design |
 | Line coverage (CI) | **≥ 85%** workspace; fail under |
