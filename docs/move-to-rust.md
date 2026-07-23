@@ -575,7 +575,7 @@ fmt → clippy -D warnings → test → llvm-cov (≥85%) → doc →
 | Install time for a new user | &lt; 2 minutes to first dry-run |
 | Dry-run on 2k-file monorepo | seconds–low minutes, clear plan |
 | Resume after kill mid-relationships | zero re-identify if checkpoint valid |
-| Eval score on fixtures | no regression vs `baseline.json` |
+| Eval score on fixtures | no regression vs frozen eval snapshots (Phase 3) |
 | Full generate UX | progress stages + call counts + checkpoint path always visible |
 | “Works with empty PROVIDER make bug” class | impossible by design |
 | Line coverage (CI) | **≥ 85%** workspace; fail under |

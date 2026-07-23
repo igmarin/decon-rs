@@ -17,7 +17,8 @@ pip install -e .
 
 ## Environment
 
-Copy the example environment file:
+Copy the example environment file (illustrative — do not run inside this
+frozen fixture directory):
 
 ```bash
 cp .env.example .env

@@ -21,6 +21,8 @@ cp .env.example .env
 
 Configure `DATABASE_URL` and `API_KEY` in `.env`.
 
+> Commands are illustrative — do not create files inside this frozen fixture.
+
 ## Run
 
 ```bash

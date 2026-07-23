@@ -25,6 +25,7 @@
         "src"
       ]
     },
+    "scoped_runs": [],
     "setup_assessment": {
       "needs_setup_guide": false,
       "score": 100,
@@ -34,7 +35,7 @@
         "has_env_docs": true,
         "has_run_instructions": true,
         "has_prerequisites": true,
-        "readme_length": 437
+        "readme_length": 504
       },
       "gaps": [],
       "config_files": [
@@ -79,6 +80,38 @@
         "config"
       ]
     },
+    "scoped_runs": [
+      {
+        "scope": [
+          "apps/alpha"
+        ],
+        "filter_stats": {
+          "filtered": true,
+          "before": 10,
+          "after": 6,
+          "kept_shared": 4,
+          "module_keys": [
+            "apps/alpha"
+          ]
+        }
+      },
+      {
+        "scope": [
+          "apps/alpha",
+          "apps/beta"
+        ],
+        "filter_stats": {
+          "filtered": true,
+          "before": 10,
+          "after": 8,
+          "kept_shared": 4,
+          "module_keys": [
+            "apps/alpha",
+            "apps/beta"
+          ]
+        }
+      }
+    ],
     "setup_assessment": {
       "needs_setup_guide": false,
       "score": 100,
@@ -88,7 +121,7 @@
         "has_env_docs": true,
         "has_run_instructions": true,
         "has_prerequisites": true,
-        "readme_length": 462
+        "readme_length": 543
       },
       "gaps": [],
       "config_files": [
@@ -126,20 +159,19 @@
         "src"
       ]
     },
+    "scoped_runs": [],
     "setup_assessment": {
       "needs_setup_guide": false,
-      "score": 98,
+      "score": 100,
       "signals": {
         "has_readme": true,
         "has_install_commands": true,
         "has_env_docs": true,
         "has_run_instructions": true,
         "has_prerequisites": true,
-        "readme_length": 288
+        "readme_length": 383
       },
-      "gaps": [
-        "README missing or too short to onboard a newcomer"
-      ],
+      "gaps": [],
       "config_files": [
         ".env.example",
         "package.json"

@@ -21,8 +21,11 @@ cp .env.example .env
 
 Set `API_KEY` in `.env` before starting.
 
+> Commands are illustrative — do not create files inside this frozen fixture.
+
 ## Run
 
 ```bash
+npm run build
 npm start
 ```

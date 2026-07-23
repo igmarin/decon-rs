@@ -64,6 +64,13 @@ struct FilterStats {
     module_keys: Vec<String>,
 }
 
+/// A scoped filter run: filter the file set to specific modules plus shared
+/// root scaffolding, recording the resulting stats.
+struct ScopedRun {
+    scope: Vec<String>,
+    filter_stats: FilterStats,
+}
+
 struct SetupSignals {
     has_readme: bool,
     has_install_commands: bool,
@@ -85,6 +92,7 @@ struct FixtureBaseline {
     crawl: CrawlResult,
     modules: Vec<(String, usize)>,
     filter_stats: FilterStats,
+    scoped_runs: Vec<ScopedRun>,
     setup_assessment: SetupAssessment,
 }
 
@@ -183,6 +191,61 @@ fn filter_stats(files: &[String], modules: &[(String, usize)]) -> FilterStats {
     }
 }
 
+/// Determine whether a module key is "shared" (root scaffolding kept when
+/// scoping to specific apps). Per `docs/best-practices.md` §2.3: root-level
+/// files and `config/` are shared scaffolding.
+fn is_shared_module(key: &str) -> bool {
+    key == "_root" || key == "config"
+}
+
+/// Filter files to those belonging to the selected modules plus shared root
+/// scaffolding. Returns the filtered file list and filter stats.
+fn filter_files_by_scope(files: &[String], scope: &[String]) -> ScopedRun {
+    let scope_set: BTreeMap<String, ()> = scope.iter().map(|s| (s.clone(), ())).collect();
+
+    let mut after_files: Vec<&String> = Vec::new();
+    let mut kept_shared = 0;
+
+    for file in files {
+        let key = module_key(file);
+        let in_scope = scope_set.contains_key(&key);
+        let is_shared = is_shared_module(&key);
+        if in_scope || is_shared {
+            after_files.push(file);
+            if is_shared && !in_scope {
+                kept_shared += 1;
+            }
+        }
+    }
+
+    let mut module_keys: Vec<String> = scope.to_vec();
+    module_keys.sort_by(|a, b| module_sort_key(a).cmp(&module_sort_key(b)));
+
+    ScopedRun {
+        scope: scope.to_vec(),
+        filter_stats: FilterStats {
+            filtered: true,
+            before: files.len(),
+            after: after_files.len(),
+            kept_shared,
+            module_keys,
+        },
+    }
+}
+
+/// Generate deterministic scoped runs for a fixture. Only the umbrella
+/// fixture has multiple apps, so only it gets scoped cases.
+fn generate_scoped_runs(fixture_name: &str, files: &[String]) -> Vec<ScopedRun> {
+    if fixture_name != "umbrella" {
+        return Vec::new();
+    }
+
+    vec![
+        filter_files_by_scope(files, &["apps/alpha".to_string()]),
+        filter_files_by_scope(files, &["apps/alpha".to_string(), "apps/beta".to_string()]),
+    ]
+}
+
 /// Assess setup documentation quality based on README content and config files.
 fn assess_setup(root: &Path, files: &[String]) -> SetupAssessment {
     let readme_path = root.join("README.md");
@@ -212,16 +275,43 @@ fn assess_setup(root: &Path, files: &[String]) -> SetupAssessment {
     let has_prerequisites = readme_lower.contains("prerequisite")
         || readme_lower.contains("require");
 
-    // Score: 5 signals × 20 = 100, with a penalty for a short README.
-    let mut score: i32 = 100;
+    // Score: each of the 5 signals contributes 20 points (max 100).
+    // A short README (< MIN_README_LEN) gets a small penalty on top.
+    let mut score: i32 = 0;
     let mut gaps: Vec<String> = Vec::new();
 
-    if !has_readme {
-        score -= 20;
+    if has_readme {
+        score += 20;
+        if readme_length < MIN_README_LEN {
+            score -= 2;
+            gaps.push("README missing or too short to onboard a newcomer".to_string());
+        }
+    } else {
         gaps.push("README missing or too short to onboard a newcomer".to_string());
-    } else if readme_length < MIN_README_LEN {
-        score -= 2;
-        gaps.push("README missing or too short to onboard a newcomer".to_string());
+    }
+
+    if has_install_commands {
+        score += 20;
+    } else {
+        gaps.push("No install/bootstrap commands documented".to_string());
+    }
+
+    if has_env_docs {
+        score += 20;
+    } else {
+        gaps.push("No environment variable documentation found".to_string());
+    }
+
+    if has_run_instructions {
+        score += 20;
+    } else {
+        gaps.push("No local run instructions documented".to_string());
+    }
+
+    if has_prerequisites {
+        score += 20;
+    } else {
+        gaps.push("No prerequisites or runtime versions documented".to_string());
     }
 
     let needs_setup_guide = score < 80 || gaps.len() >= 2;
@@ -256,15 +346,17 @@ fn assess_setup(root: &Path, files: &[String]) -> SetupAssessment {
     }
 }
 
-fn generate_fixture_baseline(root: &Path) -> FixtureBaseline {
+fn generate_fixture_baseline(name: &str, root: &Path) -> FixtureBaseline {
     let crawl = crawl_local_files(root);
     let modules = discover_modules(&crawl.files);
     let filter_stats = filter_stats(&crawl.files, &modules);
+    let scoped_runs = generate_scoped_runs(name, &crawl.files);
     let setup_assessment = assess_setup(root, &crawl.files);
     FixtureBaseline {
         crawl,
         modules,
         filter_stats,
+        scoped_runs,
         setup_assessment,
     }
 }
@@ -344,6 +436,46 @@ fn emit_fixture(name: &str, fb: &FixtureBaseline) -> String {
     s.push_str(&format!("{ind}{ind}{ind}\"module_keys\": "));
     s.push_str(&emit_string_array(&fb.filter_stats.module_keys, 3));
     s.push_str(&format!("\n{ind}{ind}}},\n"));
+
+    // scoped_runs
+    s.push_str(&format!("{ind}{ind}\"scoped_runs\": "));
+    if fb.scoped_runs.is_empty() {
+        s.push_str("[],\n");
+    } else {
+        s.push_str("[\n");
+        for (i, run) in fb.scoped_runs.iter().enumerate() {
+            s.push_str(&format!("{ind}{ind}{ind}{{\n"));
+            s.push_str(&format!("{ind}{ind}{ind}{ind}\"scope\": "));
+            s.push_str(&emit_string_array(&run.scope, 4));
+            s.push_str(&format!(",\n"));
+            s.push_str(&format!("{ind}{ind}{ind}{ind}\"filter_stats\": {{\n"));
+            s.push_str(&format!(
+                "{ind}{ind}{ind}{ind}{ind}\"filtered\": {},\n",
+                run.filter_stats.filtered
+            ));
+            s.push_str(&format!(
+                "{ind}{ind}{ind}{ind}{ind}\"before\": {},\n",
+                run.filter_stats.before
+            ));
+            s.push_str(&format!(
+                "{ind}{ind}{ind}{ind}{ind}\"after\": {},\n",
+                run.filter_stats.after
+            ));
+            s.push_str(&format!(
+                "{ind}{ind}{ind}{ind}{ind}\"kept_shared\": {},\n",
+                run.filter_stats.kept_shared
+            ));
+            s.push_str(&format!("{ind}{ind}{ind}{ind}{ind}\"module_keys\": "));
+            s.push_str(&emit_string_array(&run.filter_stats.module_keys, 5));
+            s.push_str(&format!("\n{ind}{ind}{ind}{ind}}}\n"));
+            s.push_str(&format!("{ind}{ind}{ind}}}"));
+            if i < fb.scoped_runs.len() - 1 {
+                s.push(',');
+            }
+            s.push('\n');
+        }
+        s.push_str(&format!("{ind}{ind}],\n"));
+    }
 
     // setup_assessment
     s.push_str(&format!("{ind}{ind}\"setup_assessment\": {{\n"));
@@ -475,7 +607,7 @@ fn main() -> ExitCode {
     let mut baselines: Vec<(String, FixtureBaseline)> = Vec::new();
     for name in &fixture_names {
         let fixture_path = fixtures_dir.join(name);
-        baselines.push((name.clone(), generate_fixture_baseline(&fixture_path)));
+        baselines.push((name.clone(), generate_fixture_baseline(name, &fixture_path)));
     }
 
     let generated = emit_baseline(&baselines);
