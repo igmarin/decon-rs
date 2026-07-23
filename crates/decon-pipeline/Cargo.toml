@@ -15,3 +15,6 @@ workspace = true
 decon-core = { path = "../decon-core" }
 decon-crawl = { path = "../decon-crawl" }
 decon-llm = { path = "../decon-llm" }
+
+[dev-dependencies]
+minijinja = "=2.20.0"

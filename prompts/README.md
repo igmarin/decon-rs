@@ -54,14 +54,17 @@ pipeline should pass them as integers (or numeric strings) to avoid values like
 
 All language hint variables (`language_instruction`, `lang_note`, `lang_hint`,
 `list_lang_note`, `name_lang_hint`, `desc_lang_hint`) are optional strings and
-are typically empty for English.
+are typically empty for English. All other inputs listed in the inventory table
+are required.
 
 ## Versioning and tests
 
 - Prompt text changes are **breaking** for snapshot/golden tests because they
   shift rendered output and stable hashes. Bump the prompt or tool version when
   editing these files.
-- Each prompt should have a render test: supply a fixture context, render the
-  template, and assert the output contains the expected sections / YAML markers.
+- Each prompt has a render test in `crates/decon-pipeline/tests/prompts.rs`
+  that renders the template with a synthetic fixture context and asserts the
+  output contains the expected sections / YAML markers. When adding a new
+  prompt, add a matching fixture test there.
 - Keep prompt files free of code logic; all dynamic values are supplied as
   template variables by the pipeline crates.
