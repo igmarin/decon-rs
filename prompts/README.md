@@ -24,6 +24,16 @@ variables listed in the **Inputs** column.
 | Write setup guide | `write_setup_guide.md.j2` | `utils/tutorial_quality.py` `setup_guide_prompt` | Generate a setup/onboarding chapter when repo docs are weak. | `project_name`, `score`, `gaps`, `context`, `lang` | Markdown setup chapter. |
 | Write architecture overview | `write_architecture_overview.md.j2` | `nodes.py` `WriteArchitectureOverview` | Chapter 0 overview for multi-app / engine-like monorepos. | `lang_note`, `project_name`, `summary`, `inventory`, `abstractions`, `relationships` | Markdown architecture overview. |
 
+## Integration notes
+
+- The `decon-pipeline` crate must supply the exact variable names listed in the
+  **Inputs** column. Any mismatch will cause a minijinja/Tera render error.
+- At runtime the templates should be embedded with `include_str!` so the binary
+  does not depend on the `prompts/` directory layout at execution time.
+- All `context` and file-snippet variables must be redacted of secrets before
+  rendering, per `docs/best-practices.md`. The prompts themselves contain no
+  secret content; redaction is the caller's responsibility.
+
 ## Versioning and tests
 
 - Prompt text changes are **breaking** for snapshot/golden tests because they
