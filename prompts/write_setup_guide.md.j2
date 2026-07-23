@@ -1,0 +1,32 @@
+You are writing an onboarding SETUP guide for the project `{{ project_name }}`.
+
+Existing docs were assessed as incomplete or unclear (score {{ score }}/100).
+Documented gaps:
+{{ gaps }}
+
+Below are README/setup fragments and machine-readable config files from the repo.
+Use ONLY what you can justify from this context. If something is unknown, say so explicitly and suggest how to verify.
+
+Context:
+{{ context }}
+
+Write a beginner-friendly SETUP chapter in **{{ lang }}** as Markdown with:
+
+# Setup: {{ project_name }}
+
+## Prerequisites
+## Install dependencies
+## Environment configuration
+## Database / services (if applicable)
+## Run locally
+## Verify the install
+## Common setup pitfalls
+## Where this was inferred from
+(list real file paths you used)
+
+Rules:
+- Prefer real commands found in Makefile, mix.exs aliases, docker-compose, package manifests, README.
+- Mark uncertain steps clearly.
+- Keep command blocks short.
+- Include a simple mermaid flowchart of the setup sequence (prereq -> install -> configure -> run).
+- Output ONLY the markdown chapter.

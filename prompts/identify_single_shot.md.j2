@@ -1,0 +1,37 @@
+For the project `{{ project_name }}`:
+
+Codebase Context:
+{{ context }}
+
+{{ language_instruction }}Analyze the codebase context.
+Identify the top 5-{{ max_abstraction_num }} core most important abstractions to help those new to the codebase.
+
+This may be a multi-app / engine-like monorepo (separate apps or packages that work like loosely coupled engines). Prefer abstractions that explain domain boundaries, cross-app contracts, and the main entry points newcomers must understand.
+
+For each abstraction, provide:
+1. A concise `name`{{ name_lang_hint }}.
+2. A beginner-friendly `description` explaining what it is with a simple analogy, in around 100 words{{ desc_lang_hint }}.
+3. A list of relevant `file_indices` (integers) using the format `idx # path/comment`.
+
+List of file indices and paths present in the context:
+{{ file_listing }}
+
+Format the output as a YAML list of dictionaries:
+
+```yaml
+- name: |
+    Query Processing{{ name_lang_hint }}
+  description: |
+    Explains what the abstraction does.
+    It's like a central dispatcher routing requests.{{ desc_lang_hint }}
+  file_indices:
+    - 0 # path/to/file1.py
+    - 3 # path/to/related.py
+- name: |
+    Query Optimization{{ name_lang_hint }}
+  description: |
+    Another core concept, similar to a blueprint for objects.{{ desc_lang_hint }}
+  file_indices:
+    - 5 # path/to/another.js
+# ... up to {{ max_abstraction_num }} abstractions
+```

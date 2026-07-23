@@ -1,0 +1,28 @@
+Project `{{ project_name }}` is a large multi-app / engine-like monorepo.
+Modules observed: {{ module_summary }}
+
+You are given candidate abstractions produced from separate batches (map phase).
+Merge, deduplicate, and rank them into the final top 5-{{ max_abstraction_num }} core abstractions
+for a beginner tutorial.
+
+Rules:
+- Merge synonyms / overlapping concepts into one stronger abstraction.
+- Prefer concepts that explain how the system is carved into apps/engines and how they collaborate.
+- Keep the most important domain concepts even if they live in a single app.
+- file_indices MUST be chosen from the candidate file_indices (global indices already).
+- Each final abstraction needs a clear beginner-friendly description.
+
+{{ language_instruction }}Candidates:
+{{ candidates_blob }}
+
+Return ONLY a YAML list (max {{ max_abstraction_num }} items):
+
+```yaml
+- name: |
+    Final Name{{ name_lang_hint }}
+  description: |
+    Merged beginner-friendly description.{{ desc_lang_hint }}
+  file_indices:
+    - 12 # path optional comment
+    - 44
+```
