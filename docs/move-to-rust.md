@@ -153,13 +153,13 @@ Rust addresses **shipping, correctness of the pipeline shell, and local tooling*
 ### 4.1 Crate layout (recommended)
 
 ```text
-codebase-tutorial/           # workspace
+decon-rs/                    # workspace
 ├── crates/
-│   ├── cbt-core/            # pure domain: models, pipeline traits, mermaid, budget
-│   ├── cbt-crawl/           # local + GitHub fetch
-│   ├── cbt-llm/             # provider clients (OpenAI-compatible, Gemini, …)
-│   ├── cbt-pipeline/        # stage orchestration, checkpoint, dry-run plan
-│   └── cbt-cli/             # clap binary
+│   ├── decon-core/            # pure domain: models, pipeline traits, mermaid, budget
+│   ├── decon-crawl/           # local + GitHub fetch
+│   ├── decon-llm/             # provider clients (OpenAI-compatible, Gemini, …)
+│   ├── decon-pipeline/        # stage orchestration, checkpoint, dry-run plan
+│   └── decon-cli/             # clap binary
 ├── prompts/                 # versioned prompt templates (not buried in code)
 ├── tests/
 │   ├── fixtures/            # tiny repos
@@ -172,12 +172,12 @@ codebase-tutorial/           # workspace
 ### 4.2 CLI surface (subcommand style)
 
 ```text
-cbt dry-run   --dir PATH [--apps a b] [-o output]
-cbt generate  --dir PATH | --repo URL  [all quality flags]
-cbt resume    --checkpoint PATH
-cbt each-app  --dir MONOREPO
-cbt eval      --out output/Project
-cbt providers # list configured providers / models
+decon dry-run   --dir PATH [--apps a b] [-o output]
+decon generate  --dir PATH | --repo URL  [all quality flags]
+decon resume    --checkpoint PATH
+decon each-app  --dir MONOREPO
+decon eval      --out output/Project
+decon providers # list configured providers / models
 ```
 
 Keep compatibility aliases or a migration guide from `make tutorial` / `python main.py`.
@@ -185,8 +185,8 @@ Keep compatibility aliases or a migration guide from `make tutorial` / `python m
 ### 4.3 Config layers (precedence)
 
 1. CLI flags  
-2. `cbt.toml` / `.cbt.yaml` in project or cwd  
-3. Environment (`CBT_LLM_PROVIDER`, keys, …)  
+2. `decon.toml` / `.decon.yaml` in project or cwd  
+3. Environment (`DECON_LLM_PROVIDER`, keys, …)  
 4. Defaults in code  
 
 Avoid the Make “export empty string” class of bugs: **never set env keys to blank**.
@@ -238,8 +238,8 @@ Move prompts out of string soup in source:
 
 | Current Python | Rust responsibility |
 |----------------|---------------------|
-| `crawl_local_files` / `crawl_github_files` | `cbt-crawl`: `ignore`/`walkdir` + globset; GitHub via REST + token |
-| `monorepo_scope` | pure functions in `cbt-core` |
+| `crawl_local_files` / `crawl_github_files` | `decon-crawl`: `ignore`/`walkdir` + globset; GitHub via REST + token |
+| `monorepo_scope` | pure functions in `decon-core` |
 | `context_budget` | pure functions + property tests |
 | `IdentifyAbstractions` | pipeline stage + map concurrent + reduce |
 | `AnalyzeRelationships` | stage + budgeted snippet picker |
@@ -248,7 +248,7 @@ Move prompts out of string soup in source:
 | `WriteSetupGuide` | stage + setup assess pure logic |
 | `WriteArchitectureOverview` | stage |
 | `CombineTutorial` / `diagram_builder` / `mermaid_safe` / `i18n_chrome` | pure renderers + sanitize |
-| `scripts/eval_tutorial.py` | `cbt eval` subcommand |
+| `scripts/eval_tutorial.py` | `decon eval` subcommand |
 | `Makefile` | still useful; thin wrapper around binary |
 
 Pocket Flow’s graph becomes an explicit `Pipeline` enum/state machine—**clearer** than a generic node framework for this linear workflow.
@@ -262,7 +262,7 @@ Pocket Flow’s graph becomes an explicit `Pipeline` enum/state machine—**clea
 | Miss | Why it matters |
 |------|----------------|
 | **Name + positioning** | “Tutorial-Codebase-Knowledge” is a research demo name; a CLI needs a short verb/noun |
-| **First-run wizard** | `cbt init` writes `cbt.toml`, checks API keys, sample dry-run |
+| **First-run wizard** | `decon init` writes `decon.toml`, checks API keys, sample dry-run |
 | **Exit codes** | 0 ok, 2 config, 3 budget, 4 LLM, 5 partial success with checkpoint |
 | **Machine-readable dry-run** | `--format json` for CI/agents |
 | **Telemetry opt-in** | anonymous stage timings (off by default) to improve defaults |
@@ -307,7 +307,7 @@ Pocket Flow’s graph becomes an explicit `Pipeline` enum/state machine—**clea
 
 - Binary signing / notarization (macOS)  
 - Plugin model for custom “kind” detectors  
-- Hosted mode later: same `cbt-core`, different front-end—CLI remains the reference client  
+- Hosted mode later: same `decon-core`, different front-end—CLI remains the reference client  
 
 ---
 
@@ -323,10 +323,10 @@ Pocket Flow’s graph becomes an explicit `Pipeline` enum/state machine—**clea
 
 ### Phase 1 — Rust skeleton (no LLM)
 
-- `cbt crawl` / dry-run plan equal to Python dry-run numbers on fixtures  
+- `decon crawl` / dry-run plan equal to Python dry-run numbers on fixtures  
 - mermaid sanitize + index builder parity  
 - setup assessment pure logic parity  
-- `cbt eval` port  
+- `decon eval` port  
 
 **Exit criteria:** dry-run stats match Python ± small deltas; eval works on existing `output/` samples; **≥ 85% coverage** on core/crawl; TDD used for budget/scope/mermaid; rustdoc on public API; CONTRIBUTING describes the test workflow.
 
@@ -344,12 +344,12 @@ Pocket Flow’s graph becomes an explicit `Pipeline` enum/state machine—**clea
 - Spanish chrome  
 - each-app  
 
-**Exit criteria:** `cbt eval` score ≥ threshold on fixtures; one real monorepo smoke.
+**Exit criteria:** `decon eval` score ≥ threshold on fixtures; one real monorepo smoke.
 
 ### Phase 4 — Polish product
 
 - installers, man page, shell completions  
-- `cbt.toml`  
+- `decon.toml`  
 - concurrency limits, better errors  
 - deprecate Python entrypoint or wrap binary  
 
@@ -427,8 +427,8 @@ Coverage is a **floor**, not the goal—but it is a **gate**.
 | Scope | Target |
 |-------|--------|
 | Workspace overall (line coverage) | **≥ 85%** |
-| `cbt-core` (pure logic) | **≥ 90%** preferred |
-| `cbt-cli` | lower OK if thin; critical paths still tested |
+| `decon-core` (pure logic) | **≥ 90%** preferred |
+| `decon-cli` | lower OK if thin; critical paths still tested |
 | LLM HTTP clients | mock-based; don’t chase 100% on generated clients |
 
 #### How to enforce
@@ -449,7 +449,7 @@ Coverage is a **floor**, not the goal—but it is a **gate**.
 
 **85% with weak asserts is a false green.** Pair coverage gate with:
 
-- Mutation testing later (optional, `cargo-mutants` on `cbt-core`)  
+- Mutation testing later (optional, `cargo-mutants` on `decon-core`)  
 - Eval score thresholds on fixture tutorials  
 - Parity tests vs Python on dry-run counts for frozen fixtures  
 
@@ -475,7 +475,7 @@ Documentation ships **with** the binary, not after.
 |----------|---------|
 | **ARCHITECTURE.md** (or `docs/architecture.md`) | Crates, stage diagram, data flow |
 | **CONTRIBUTING.md** | TDD workflow, coverage gate, how to run tests |
-| **Module-level rustdoc** | All public items in `cbt-core` / `cbt-pipeline` |
+| **Module-level rustdoc** | All public items in `decon-core` / `decon-pipeline` |
 | **Prompt catalog** | What each prompt is for; input/output contract |
 | **Fixture guide** | How to add a tiny repo fixture + expected dry-run stats |
 
@@ -517,7 +517,7 @@ fmt → clippy -D warnings → test → llvm-cov (≥85%) → doc →
 
 | Phase | Quality bar |
 |-------|-------------|
-| Phase 1 (crawl/dry-run/eval) | TDD from day one; coverage ≥ 85% on `cbt-core` + crawl already |
+| Phase 1 (crawl/dry-run/eval) | TDD from day one; coverage ≥ 85% on `decon-core` + crawl already |
 | Phase 2 (identify) | Contract tests for map/reduce parse; mock LLM |
 | Phase 3 (full generate) | Golden eval fixtures; docs for every subcommand |
 | Phase 4 (product polish) | man page, completions, CONTRIBUTING, coverage badge |
@@ -594,4 +594,4 @@ fmt → clippy -D warnings → test → llvm-cov (≥85%) → doc →
 
 ---
 
-*When you start the rewrite, treat this file as the product spec for `cbt-pipeline` stages; update it when stage contracts change so Python and Rust do not diverge silently.*
+*When you start the rewrite, treat this file as the product spec for `decon-pipeline` stages; update it when stage contracts change so Python and Rust do not diverge silently.*
