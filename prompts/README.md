@@ -34,6 +34,28 @@ variables listed in the **Inputs** column.
   rendering, per `docs/best-practices.md`. The prompts themselves contain no
   secret content; redaction is the caller's responsibility.
 
+## Variable schema
+
+Numeric placeholders are rendered with their string representation, so the
+pipeline should pass them as integers (or numeric strings) to avoid values like
+`"5"` appearing in the prompt.
+
+| Variable | Expected type / values | Used in |
+|---|---|---|
+| `batch_idx`, `batch_total` | positive integers, `batch_idx <= batch_total` | `identify_map` |
+| `chapter_num` | positive integer | `write_chapter` |
+| `diagram_level` | one of `minimal`, `standard`, `rich` | `chapter_outline` |
+| `language`, `lang` | lowercase language name, e.g. `english`, `spanish` | several prompts |
+| `max_abstraction_num` | positive integer | `identify_single_shot`, `identify_reduce` |
+| `need` | non-negative integer | `chapter_outline`, `write_chapter`, `review_chapter` |
+| `per_batch` | positive integer | `identify_map` |
+| `score` | integer `0–100` | `write_setup_guide` |
+| `tier` | one of `S`, `M`, `L` | `chapter_outline`, `write_chapter` |
+
+All language hint variables (`language_instruction`, `lang_note`, `lang_hint`,
+`list_lang_note`, `name_lang_hint`, `desc_lang_hint`) are optional strings and
+are typically empty for English.
+
 ## Versioning and tests
 
 - Prompt text changes are **breaking** for snapshot/golden tests because they
