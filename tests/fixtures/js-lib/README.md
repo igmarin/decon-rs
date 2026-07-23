@@ -1,0 +1,28 @@
+# js-lib
+
+A tiny TypeScript package used as a decon-rs test fixture.
+
+## Prerequisites
+
+- Node.js 20 or newer
+- npm 10 or newer
+
+## Install
+
+```bash
+npm install
+```
+
+## Environment
+
+```bash
+cp .env.example .env
+```
+
+Set `API_KEY` in `.env` before starting.
+
+## Run
+
+```bash
+npm start
+```
