@@ -55,6 +55,10 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
 # Security audit
 cargo audit
+
+# Fixture baseline check (verify baseline.json matches tests/fixtures/)
+rustc tests/fixtures/regenerate_baseline.rs -o /tmp/regen_baseline && \
+  /tmp/regen_baseline tests/fixtures/ --check
 ```
 
 ## Coverage gate

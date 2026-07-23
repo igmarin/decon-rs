@@ -47,6 +47,23 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
       - run: cargo test --workspace
 
+  # Verifies that tests/fixtures/baseline.json stays in sync with the fixture
+  # directories. The regenerator is a standalone, zero-dependency Rust file.
+  baseline-check:
+    name: Fixture Baseline Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
+        with:
+          toolchain: stable
+      - name: Verify baseline.json matches fixtures
+        run: |
+          rustc tests/fixtures/regenerate_baseline.rs -o /tmp/regen_baseline
+          /tmp/regen_baseline tests/fixtures/ --check
+
   # Coverage is report-only for now: it must be visible on every PR, but the
   # ≥85% gate (failing the build below threshold) is Milestone 2 scope, once
   # decon-core has real domain logic worth measuring. See issue #2 / #(M2).

@@ -1,0 +1,181 @@
+{
+  "python-lib": {
+    "crawl": {
+      "file_count": 6,
+      "files": [
+        ".env.example",
+        "README.md",
+        "pyproject.toml",
+        "src/mylib/__init__.py",
+        "src/mylib/cli.py",
+        "src/mylib/core.py"
+      ]
+    },
+    "modules": {
+      "_root": 3,
+      "src": 3
+    },
+    "filter_stats": {
+      "filtered": false,
+      "before": 6,
+      "after": 6,
+      "kept_shared": 0,
+      "module_keys": [
+        "_root",
+        "src"
+      ]
+    },
+    "scoped_runs": [],
+    "setup_assessment": {
+      "needs_setup_guide": false,
+      "score": 100,
+      "signals": {
+        "has_readme": true,
+        "has_install_commands": true,
+        "has_env_docs": true,
+        "has_run_instructions": true,
+        "has_prerequisites": true,
+        "readme_length": 504
+      },
+      "gaps": [],
+      "config_files": [
+        ".env.example",
+        "pyproject.toml"
+      ]
+    }
+  },
+  "umbrella": {
+    "crawl": {
+      "file_count": 10,
+      "files": [
+        ".env.example",
+        "README.md",
+        "apps/alpha/lib/alpha.ex",
+        "apps/alpha/mix.exs",
+        "apps/beta/lib/beta.ex",
+        "apps/beta/mix.exs",
+        "apps/gamma/lib/gamma.ex",
+        "apps/gamma/mix.exs",
+        "config/config.exs",
+        "mix.exs"
+      ]
+    },
+    "modules": {
+      "apps/alpha": 2,
+      "apps/beta": 2,
+      "apps/gamma": 2,
+      "_root": 3,
+      "config": 1
+    },
+    "filter_stats": {
+      "filtered": false,
+      "before": 10,
+      "after": 10,
+      "kept_shared": 0,
+      "module_keys": [
+        "apps/alpha",
+        "apps/beta",
+        "apps/gamma",
+        "_root",
+        "config"
+      ]
+    },
+    "scoped_runs": [
+      {
+        "scope": [
+          "apps/alpha"
+        ],
+        "filter_stats": {
+          "filtered": true,
+          "before": 10,
+          "after": 6,
+          "kept_shared": 4,
+          "module_keys": [
+            "apps/alpha"
+          ]
+        }
+      },
+      {
+        "scope": [
+          "apps/alpha",
+          "apps/beta"
+        ],
+        "filter_stats": {
+          "filtered": true,
+          "before": 10,
+          "after": 8,
+          "kept_shared": 4,
+          "module_keys": [
+            "apps/alpha",
+            "apps/beta"
+          ]
+        }
+      }
+    ],
+    "setup_assessment": {
+      "needs_setup_guide": false,
+      "score": 100,
+      "signals": {
+        "has_readme": true,
+        "has_install_commands": true,
+        "has_env_docs": true,
+        "has_run_instructions": true,
+        "has_prerequisites": true,
+        "readme_length": 543
+      },
+      "gaps": [],
+      "config_files": [
+        ".env.example",
+        "apps/alpha/mix.exs",
+        "apps/beta/mix.exs",
+        "apps/gamma/mix.exs",
+        "mix.exs"
+      ]
+    }
+  },
+  "js-lib": {
+    "crawl": {
+      "file_count": 6,
+      "files": [
+        ".env.example",
+        "README.md",
+        "package.json",
+        "src/index.ts",
+        "src/utils.ts",
+        "tsconfig.json"
+      ]
+    },
+    "modules": {
+      "_root": 4,
+      "src": 2
+    },
+    "filter_stats": {
+      "filtered": false,
+      "before": 6,
+      "after": 6,
+      "kept_shared": 0,
+      "module_keys": [
+        "_root",
+        "src"
+      ]
+    },
+    "scoped_runs": [],
+    "setup_assessment": {
+      "needs_setup_guide": false,
+      "score": 100,
+      "signals": {
+        "has_readme": true,
+        "has_install_commands": true,
+        "has_env_docs": true,
+        "has_run_instructions": true,
+        "has_prerequisites": true,
+        "readme_length": 383
+      },
+      "gaps": [],
+      "config_files": [
+        ".env.example",
+        "package.json"
+      ]
+    }
+  }
+}
