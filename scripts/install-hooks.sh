@@ -24,7 +24,7 @@ cat > "${HOOK_FILE}" << 'EOF'
 set -euo pipefail
 
 # Load API key from config or environment
-if [ -z "${OPENAI_API_KEY:-}" ]; then
+if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
   CONFIG_FILE="${HOME}/.config/rs-guard/env"
   if [ -f "${CONFIG_FILE}" ]; then
     # shellcheck source=/dev/null
@@ -43,9 +43,9 @@ fi
 RS_GUARD="${RS_GUARD:-$(command -v rs-guard 2>/dev/null || echo ./rs-guard)}"
 
 # Check if API key is available
-if [ -z "${OPENAI_API_KEY:-}" ]; then
-  echo "[rs-guard] OPENAI_API_KEY not set. Skipping review."
-  echo "[rs-guard] Set it in ~/.config/rs-guard/env or export OPENAI_API_KEY=..."
+if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
+  echo "[rs-guard] DEEPSEEK_API_KEY not set. Skipping review."
+  echo "[rs-guard] Set it in ~/.config/rs-guard/env or export DEEPSEEK_API_KEY=..."
   exit 0
 fi
 
@@ -58,9 +58,13 @@ fi
 
 echo "[rs-guard] Running code review on staged changes..."
 
+# rs-guard's top-level --provider flag is not wired into the main review
+# pipeline's config resolution; select the provider via RS_GUARD_PROVIDER.
+export RS_GUARD_PROVIDER="${RS_GUARD_PROVIDER:-deepseek}"
+
 # Run review (capture exit code)
 EXIT_CODE=0
-"${RS_GUARD}" --prompt-file .github/review-prompt.md --provider openai || EXIT_CODE=$?
+"${RS_GUARD}" --prompt-file .github/review-prompt.md || EXIT_CODE=$?
 
 case ${EXIT_CODE} in
   0)
