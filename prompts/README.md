@@ -29,7 +29,9 @@ variables listed in the **Inputs** column.
 - The `decon-pipeline` crate must supply the exact variable names listed in the
   **Inputs** column. Any mismatch will cause a minijinja/Tera render error.
 - At runtime the templates should be embedded with `include_str!` so the binary
-  does not depend on the `prompts/` directory layout at execution time.
+  does not depend on the `prompts/` directory layout at execution time. Full
+  production embedding in `decon-pipeline` / `decon-llm` is left to the
+  integration PR.
 - All `context` and file-snippet variables must be redacted of secrets before
   rendering, per `docs/best-practices.md`. The prompts themselves contain no
   secret content; redaction is the caller's responsibility.

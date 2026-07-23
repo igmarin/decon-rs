@@ -4,20 +4,17 @@ use minijinja::{Environment, context};
 
 fn render(template: &str, ctx: minijinja::Value) -> String {
     let mut env = Environment::new();
-    env.add_template("t", template).unwrap();
-    env.get_template("t").unwrap().render(ctx).unwrap()
+    env.add_template("t", template)
+        .expect("failed to add template");
+    env.get_template("t")
+        .expect("failed to get template")
+        .render(ctx)
+        .expect("failed to render template")
 }
 
 macro_rules! render_prompt {
     ($name:literal, $ctx:expr) => {
-        render(
-            include_str!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../../prompts/",
-                $name
-            )),
-            $ctx,
-        )
+        render(include_str!(concat!("../../../prompts/", $name)), $ctx)
     };
 }
 
