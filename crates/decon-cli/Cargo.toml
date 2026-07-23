@@ -1,0 +1,27 @@
+[package]
+name = "decon-cli"
+description = "decon: deconstruct a codebase into an AI-generated tutorial (CLI binary)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "decon"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+decon-core = { path = "../decon-core" }
+decon-crawl = { path = "../decon-crawl" }
+decon-llm = { path = "../decon-llm" }
+decon-pipeline = { path = "../decon-pipeline" }
+clap = { version = "4.6", features = ["derive"] }
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+predicates = "3.1.4"

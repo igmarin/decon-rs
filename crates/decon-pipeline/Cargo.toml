@@ -1,0 +1,17 @@
+[package]
+name = "decon-pipeline"
+description = "Stage orchestration, checkpoint/resume, and dry-run planning for decon."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+decon-core = { path = "../decon-core" }
+decon-crawl = { path = "../decon-crawl" }
+decon-llm = { path = "../decon-llm" }
