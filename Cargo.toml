@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/decon-core",
+    "crates/decon-crawl",
+    "crates/decon-llm",
+    "crates/decon-pipeline",
+    "crates/decon-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/igmarin/decon-rs"
+authors = ["Ismael Marín"]
+
+[workspace.lints.rust]
+missing_docs = "warn"
+
+[profile.release]
+# Small, predictable binaries for a CLI distributed as a single artifact.
+strip = true
+lto = true
