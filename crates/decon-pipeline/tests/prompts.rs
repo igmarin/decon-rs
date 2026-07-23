@@ -330,3 +330,157 @@ fn write_architecture_overview_renders_with_expected_markers() {
     );
     assert!(out.contains("mermaid"), "missing mermaid mention");
 }
+
+macro_rules! test_prompt_minimal {
+    ($fn_name:ident, $file:literal, $ctx:expr) => {
+        #[test]
+        fn $fn_name() {
+            let out = render_prompt!($file, $ctx);
+            let file_name: &str = $file;
+            assert!(
+                !out.contains("{{"),
+                "{file_name} still contains unrendered placeholders"
+            );
+        }
+    };
+}
+
+test_prompt_minimal!(
+    identify_single_shot_minimal,
+    "identify_single_shot.md.j2",
+    context! {
+        project_name => "x",
+        context => "",
+        language_instruction => "",
+        max_abstraction_num => 5,
+        name_lang_hint => "",
+        desc_lang_hint => "",
+        file_listing => "",
+    }
+);
+
+test_prompt_minimal!(
+    identify_map_minimal,
+    "identify_map.md.j2",
+    context! {
+        batch_idx => 1,
+        batch_total => 1,
+        project_name => "x",
+        module_note => "",
+        context => "",
+        language_instruction => "",
+        per_batch => 1,
+        name_lang_hint => "",
+        desc_lang_hint => "",
+        file_listing => "",
+    }
+);
+
+test_prompt_minimal!(
+    identify_reduce_minimal,
+    "identify_reduce.md.j2",
+    context! {
+        project_name => "x",
+        module_summary => "",
+        language_instruction => "",
+        max_abstraction_num => 5,
+        name_lang_hint => "",
+        desc_lang_hint => "",
+        candidates_blob => "",
+    }
+);
+
+test_prompt_minimal!(
+    analyze_relationships_minimal,
+    "analyze_relationships.md.j2",
+    context! {
+        project_name => "x",
+        list_lang_note => "",
+        abstraction_listing => "",
+        context => "",
+        language_instruction => "",
+        monorepo_instruction => "",
+        lang_hint => "",
+    }
+);
+
+test_prompt_minimal!(
+    order_chapters_minimal,
+    "order_chapters.md.j2",
+    context! {
+        project_name => "x",
+        list_lang_note => "",
+        abstraction_listing => "",
+        context => "",
+    }
+);
+
+test_prompt_minimal!(
+    chapter_outline_minimal,
+    "chapter_outline.md.j2",
+    context! {
+        lang => "English",
+        tier => "S",
+        diagram_level => "minimal",
+        need => 0,
+    }
+);
+
+test_prompt_minimal!(
+    write_chapter_minimal,
+    "write_chapter.md.j2",
+    context! {
+        language_instruction => "",
+        project_name => "x",
+        abstraction_name => "A",
+        chapter_num => 1,
+        abstraction_description => "",
+        tier => "S",
+        kind => "",
+        apps_line => "",
+        entry_list => "",
+        full_chapter_listing => "",
+        prev_link => "",
+        next_link => "",
+        previous_chapters_summary => "",
+        file_context_str => "",
+        chapter_outline => "## MANDATORY CHAPTER STRUCTURE\n## DIAGRAM REQUIREMENTS\n## GROUNDING RULES",
+        need => 0,
+    }
+);
+
+test_prompt_minimal!(
+    review_chapter_minimal,
+    "review_chapter.md.j2",
+    context! {
+        language => "English",
+        need => 0,
+        have => 0,
+        chapter_md => "",
+    }
+);
+
+test_prompt_minimal!(
+    write_setup_guide_minimal,
+    "write_setup_guide.md.j2",
+    context! {
+        project_name => "x",
+        score => 0,
+        gaps => "",
+        context => "",
+        lang => "English",
+    }
+);
+
+test_prompt_minimal!(
+    write_architecture_overview_minimal,
+    "write_architecture_overview.md.j2",
+    context! {
+        lang_note => "",
+        project_name => "x",
+        summary => "",
+        inventory => "",
+        abstractions => "",
+        relationships => "",
+    }
+);
