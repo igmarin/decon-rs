@@ -17,4 +17,6 @@ decon-crawl = { path = "../decon-crawl" }
 decon-llm = { path = "../decon-llm" }
 
 [dev-dependencies]
+# Pinned because prompt syntax is sensitive to minijinja/Jinja2 behavior and
+# golden/snapshot tests depend on exact render output.
 minijinja = "=2.20.0"

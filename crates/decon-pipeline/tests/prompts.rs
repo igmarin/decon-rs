@@ -14,7 +14,14 @@ fn render(template: &str, ctx: minijinja::Value) -> String {
 
 macro_rules! render_prompt {
     ($name:literal, $ctx:expr) => {
-        render(include_str!(concat!("../../../prompts/", $name)), $ctx)
+        render(
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../prompts/",
+                $name
+            )),
+            $ctx,
+        )
     };
 }
 
@@ -58,6 +65,7 @@ fn identify_map_renders_with_expected_markers() {
         }
     );
     assert!(out.contains("batch 1/3"), "missing batch indicator");
+    assert!(out.contains("up to 5 important"), "missing per_batch count");
     assert!(out.contains("```yaml"), "missing yaml fence");
     assert!(out.contains("name:"), "missing name field");
     assert!(out.contains("description:"), "missing description field");
@@ -79,6 +87,7 @@ fn identify_reduce_renders_with_expected_markers() {
         }
     );
     assert!(out.contains("top 5-10"), "missing max abstractions range");
+    assert!(out.contains("(max 10 items):"), "missing max item count");
     assert!(out.contains("```yaml"), "missing yaml fence");
     assert!(
         out.contains("Final Name"),
@@ -163,6 +172,8 @@ fn chapter_outline_renders_with_expected_markers() {
         "missing grounding section"
     );
     assert!(out.contains("mermaid"), "missing mermaid mention");
+    assert!(out.contains("**M**"), "missing tier value");
+    assert!(out.contains("**standard**"), "missing diagram level");
     assert!(out.contains("2"), "missing diagram count");
 }
 
@@ -204,6 +215,14 @@ fn write_chapter_renders_with_expected_markers() {
         "missing chapter instruction"
     );
     assert!(out.contains("Query Processing"), "missing abstraction name");
+    assert!(
+        out.contains("This is Chapter 1.\n"),
+        "missing chapter number"
+    );
+    assert!(
+        out.contains("Tier: M | Kind: service | Apps: core"),
+        "missing concept metadata"
+    );
     assert!(out.contains("## Motivation"), "missing Motivation section");
     assert!(out.contains("## Core idea"), "missing Core idea section");
     assert!(
@@ -250,6 +269,10 @@ fn review_chapter_renders_with_expected_markers() {
     assert!(
         out.contains("Ensure at least 2 mermaid diagrams"),
         "missing diagram requirement"
+    );
+    assert!(
+        out.contains("(currently 1)."),
+        "missing current diagram count"
     );
     assert!(out.contains("Chapter:"), "missing chapter marker");
     assert!(out.contains("Output ONLY"), "missing output instruction");
