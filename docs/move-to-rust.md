@@ -322,7 +322,7 @@ Pocket Flow’s graph becomes an explicit `Pipeline` enum/state machine—**clea
 - Agree engineering bar: **TDD**, **≥ 85% coverage**, **documentation gates** (this section)  
 - Add `CONTRIBUTING.md` skeleton before significant Rust code  
 
-> **Baseline strategy (completed in M0/PR #17).** The frozen `baseline.json`
+> **Baseline strategy (completed in M0).** The frozen `baseline.json`
 > was originally produced by the Python reference's `crawl_local_files`,
 > `monorepo_scope`, and `assess_setup_docs`. A pure-Rust regenerator
 > (`tests/fixtures/regenerate_baseline.rs`, zero dependencies) now reproduces

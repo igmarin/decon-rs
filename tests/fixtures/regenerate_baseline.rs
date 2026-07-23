@@ -366,7 +366,11 @@ fn generate_fixture_baseline(name: &str, root: &Path) -> FixtureBaseline {
 // ---------------------------------------------------------------------------
 
 fn escape_json(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }
 
 fn emit_string_array(items: &[String], indent_level: usize) -> String {
@@ -392,7 +396,7 @@ fn emit_fixture(name: &str, fb: &FixtureBaseline) -> String {
     let ind = "  ".to_string();
 
     // Fixture key
-    s.push_str(&format!("{ind}\"{name}\": {{\n"));
+    s.push_str(&format!("{ind}\"{}\": {{\n", escape_json(name)));
 
     // crawl
     s.push_str(&format!("{ind}{ind}\"crawl\": {{\n"));
@@ -407,7 +411,7 @@ fn emit_fixture(name: &str, fb: &FixtureBaseline) -> String {
     // modules
     s.push_str(&format!("{ind}{ind}\"modules\": {{\n"));
     for (i, (key, count)) in fb.modules.iter().enumerate() {
-        s.push_str(&format!("{ind}{ind}{ind}\"{key}\": {count}"));
+        s.push_str(&format!("{ind}{ind}{ind}\"{}\": {count}", escape_json(key)));
         if i < fb.modules.len() - 1 {
             s.push(',');
         }
@@ -574,14 +578,20 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
 
-    // Discover fixture subdirectories.
+    // Discover fixture subdirectories. Error on non-UTF-8 names so
+    // accidental encoding issues surface in CI rather than being silently
+    // skipped (which would produce a misleading baseline mismatch).
     let mut found: Vec<String> = Vec::new();
     for entry in fs::read_dir(&fixtures_dir).expect("read fixtures dir") {
         let entry = entry.expect("read dir entry");
         if entry.path().is_dir() {
-            if let Some(name) = entry.file_name().to_str() {
-                found.push(name.to_string());
-            }
+            let name = entry.file_name().into_string().unwrap_or_else(|name| {
+                eprintln!(
+                    "Error: fixture directory name is not valid UTF-8: {name:?}",
+                );
+                std::process::exit(2);
+            });
+            found.push(name);
         }
     }
 
