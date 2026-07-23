@@ -1,0 +1,31 @@
+{{ language_instruction }}Write a beginner-friendly tutorial chapter (Markdown) for project `{{ project_name }}` about: "{{ abstraction_name }}".
+This is Chapter {{ chapter_num }}.
+
+Concept metadata:
+- Name: {{ abstraction_name }}
+- Description: {{ abstraction_description }}
+- Tier: {{ tier }} | Kind: {{ kind }} | Apps: {{ apps_line }}
+- Entry files:
+{{ entry_list }}
+
+Complete Tutorial Structure:
+{{ full_chapter_listing }}
+
+Previous / next:
+- Previous: {{ prev_link }}
+- Next: {{ next_link }}
+
+Context from previous chapters (summaries only):
+{{ previous_chapters_summary }}
+
+Relevant Code Snippets (authoritative — ground your explanations here):
+{{ file_context_str }}
+
+{{ chapter_outline }}
+
+Extra instructions:
+- If this is not the first chapter, open Motivation with a short transition linking to the previous chapter.
+- End Summary with a transition link to the next chapter when present.
+- When referring to other abstractions, use Markdown links from the Complete Tutorial Structure.
+- Output *only* the Markdown chapter (no surrounding ```markdown fence).
+- Minimum mermaid diagrams required: {{ need }}

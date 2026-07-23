@@ -1,0 +1,30 @@
+{{ lang_note }}Write an architecture overview chapter for monorepo `{{ project_name }}`.
+This codebase is multi-app / engine-like (umbrella apps or loosely coupled packages).
+
+Project summary:
+{{ summary }}
+
+Module inventory:
+{{ inventory }}
+
+Core abstractions:
+{{ abstractions }}
+
+Relationships:
+{{ relationships }}
+
+Produce Markdown with:
+
+# Architecture overview
+
+## What kind of system this is
+## How the monorepo is carved up (apps/packages as engines)
+## How apps collaborate
+## Suggested reading order for newcomers
+## Mental model diagram
+(include at least one mermaid flowchart of apps and major concepts)
+
+Rules:
+- Be concrete; name real apps from the inventory.
+- Do not invent apps not listed.
+- Output ONLY markdown.

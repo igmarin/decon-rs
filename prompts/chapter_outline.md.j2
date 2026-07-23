@@ -1,0 +1,29 @@
+## MANDATORY CHAPTER STRUCTURE (follow this exact section order)
+
+Write the chapter in **{{ lang }}** using these markdown headings (translate heading titles to {{ lang }} if not English, but keep the same order):
+
+1. `# Chapter N: <Name>` (title)
+2. `## Motivation` — problem + one concrete use case
+3. `## Core idea` — short analogy (2–4 sentences)
+4. `## Mental model` — include a mermaid diagram when required
+5. `## How to use it` — minimal realistic examples; use REAL file paths from the snippets
+6. `## Under the hood` — step-by-step runtime; include a mermaid sequenceDiagram when required
+7. `## Key files` — bullet list of real paths from this repo with one-line roles
+8. `## Connections` — links to other chapters using [Title](filename.md)
+9. `## Pitfalls` — 2–4 common mistakes
+10. `## Summary` — recap + link to next chapter if any
+
+## DIAGRAM REQUIREMENTS
+- Complexity tier for this abstraction: **{{ tier }}**
+- Diagram richness level: **{{ diagram_level }}**
+- You MUST include at least **{{ need }}** fenced ```mermaid``` block(s) in this chapter.
+- Prefer: flowchart for structure; sequenceDiagram for runtime (max 5–6 participants).
+- Keep diagram labels short. No raw double-quotes inside node text. Use `participant X as Label` form.
+- If tier is L, include BOTH a structural flowchart AND a sequenceDiagram (counts toward the minimum).
+
+## GROUNDING RULES (anti-hallucination)
+- Prefer real paths present in "Relevant Code Snippets" / Key files.
+- Do NOT invent modules, apps, or APIs that are not evidenced in the snippets.
+- If you simplify code for teaching, mark it with a comment like: simplified for teaching.
+- Code blocks should stay under ~10 lines each; split longer flows.
+- Previous chapters context is for continuity only — do not contradict established names.
