@@ -1,0 +1,55 @@
+# cargo-deny configuration
+# Docs: https://embarkstudios.github.io/cargo-deny/
+#
+# Run locally:  cargo deny check
+# CI job:       .github/workflows/ci.yml (deny job)
+
+[graph]
+all-features = true
+
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+unmaintained = "workspace"
+# TODO(#75): serde_yml and its transitive dependency libyml each have an
+# unsoundness advisory. They are being removed in #75 (migrate off
+# serde_yml). Once #75 lands, remove both entries from this ignore list.
+ignore = [
+    { id = "RUSTSEC-2025-0067", reason = "libyml unsound; being fixed in #75 (migrate off serde_yml)" },
+    { id = "RUSTSEC-2025-0068", reason = "serde_yml unsound; being fixed in #75 (migrate off serde_yml)" },
+]
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+    "0BSD",
+]
+exceptions = []
+
+[licenses.private]
+ignore = true
+registries = []
+
+[bans]
+multiple-versions = "warn"
+# Workspace path dependencies (e.g. `decon-core = { path = "../decon-core" }`)
+# have no version requirement and are flagged as wildcards. Allow them so the
+# check passes for this workspace layout.
+wildcards = "allow"
+deny = []
+skip = []
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
