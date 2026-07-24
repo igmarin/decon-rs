@@ -12,4 +12,10 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-decon-core = { path = "../decon-core" }
+# decon-core is intentionally not required for path inventory alone; pipeline
+# stages that attach domain types will re-introduce the dependency when needed.
+thiserror = "2.0"
+
+[dev-dependencies]
+serde_json = "1.0"
+tempfile = "3.20"
