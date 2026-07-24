@@ -14,7 +14,7 @@ use std::time::Duration;
 use thiserror::Error;
 
 /// Errors returned by [`crate::LlmClient`] implementations.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum LlmError {
     /// Network or transport failure (DNS, connection refused, TLS, …).
     ///

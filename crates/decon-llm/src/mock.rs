@@ -9,11 +9,14 @@
 //! - Track how many times [`crate::LlmClient::complete`] was called.
 //!
 //! All interior state is guarded by a [`std::sync::Mutex`], so `MockClient`
-//! is `Send + Sync` and safe to share across async tasks.
+//! is `Send + Sync` and safe to share across async tasks. Mutex poisoning is
+//! handled gracefully by recovering the inner data — a poisoned lock only
+//! happens when a test panics while holding the lock, in which case the test
+//! has already failed.
 
 use crate::{LlmClient, LlmError};
 use async_trait::async_trait;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 /// Internal state for [`MockClient`], guarded by a `Mutex`.
 #[derive(Debug)]
@@ -60,6 +63,17 @@ pub struct MockClient {
     state: Mutex<MockState>,
 }
 
+/// Lock the mock's internal state, recovering from poisoning gracefully.
+///
+/// A poisoned mutex only occurs when a test panics while holding the lock,
+/// which already fails the test. Recovering the inner data lets subsequent
+/// assertions (e.g. `call_count`) still work in tear-down.
+fn lock(state: &Mutex<MockState>) -> MutexGuard<'_, MockState> {
+    state
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 impl MockClient {
     /// Create a mock that always returns `response` for every call.
     #[must_use]
@@ -75,7 +89,8 @@ impl MockClient {
     /// # Panics
     ///
     /// Panics if `responses` is empty — a mock must have at least one
-    /// response to return.
+    /// response to return. This is a programmer error in test setup, not a
+    /// runtime condition.
     #[must_use]
     pub fn with_responses(responses: Vec<String>) -> Self {
         assert!(
@@ -94,7 +109,7 @@ impl MockClient {
     #[must_use]
     pub fn fail_on(self, call_index: usize, error: LlmError) -> Self {
         {
-            let mut state = self.state.lock().expect("mock mutex poisoned");
+            let mut state = lock(&self.state);
             state.fail_on = Some((call_index, error));
         }
         self
@@ -102,7 +117,7 @@ impl MockClient {
 
     /// Number of times [`LlmClient::complete`] has been called so far.
     pub fn call_count(&self) -> usize {
-        self.state.lock().expect("mock mutex poisoned").calls
+        lock(&self.state).calls
     }
 
     /// Advance to the next response, repeating the last one if exhausted.
@@ -119,49 +134,29 @@ impl MockClient {
 #[async_trait]
 impl LlmClient for MockClient {
     async fn complete(&self, _prompt: &str) -> Result<String, LlmError> {
-        let (response, should_fail) = {
-            let mut state = self.state.lock().expect("mock mutex poisoned");
+        // Collect everything we need in one short critical section, then
+        // drop the lock before returning. No await is held across the lock.
+        let (response, error) = {
+            let mut state = lock(&self.state);
             let call_index = state.calls;
             state.calls += 1;
-            let should_fail = state
+            let response = Self::next_response(&mut state);
+            let error = state
                 .fail_on
                 .as_ref()
-                .is_some_and(|(idx, _)| *idx == call_index);
-            let response = Self::next_response(&mut state);
-            (response, should_fail)
+                .and_then(|(idx, err)| (*idx == call_index).then(|| err.clone()));
+            (response, error)
         };
-        if should_fail {
-            // Reconstruct a copy of the error without holding the lock
-            // across an await boundary (there is no await here, but this
-            // keeps the critical section minimal and clippy-happy).
-            let error = {
-                let state = self.state.lock().expect("mock mutex poisoned");
-                state
-                    .fail_on
-                    .as_ref()
-                    .map(|(_, e)| match e {
-                        LlmError::Network { message } => LlmError::network(message.clone()),
-                        LlmError::Timeout => LlmError::Timeout,
-                        LlmError::RateLimit { retry_after } => LlmError::RateLimit {
-                            retry_after: *retry_after,
-                        },
-                        LlmError::Provider { status, body } => LlmError::Provider {
-                            status: *status,
-                            body: body.clone(),
-                        },
-                        LlmError::Parse { message } => LlmError::parse(message.clone()),
-                    })
-                    .expect("should_fail implies fail_on is set")
-            };
-            return Err(error);
+        match error {
+            Some(err) => Err(err),
+            None => Ok(response),
         }
-        Ok(response)
     }
 }
 
 impl std::fmt::Debug for MockClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let state = self.state.lock().expect("mock mutex poisoned");
+        let state = lock(&self.state);
         f.debug_struct("MockClient")
             .field("responses", &state.responses)
             .field("next", &state.next)
