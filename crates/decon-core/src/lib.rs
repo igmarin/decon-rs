@@ -12,6 +12,10 @@
 
 #![deny(missing_docs)]
 
+pub mod module;
+
+pub use module::{ModuleCount, ModuleKey, ROOT_MODULE, discover_modules, module_key};
+
 /// The version of this crate, as declared in `Cargo.toml`.
 ///
 /// Exposed for diagnostics (e.g. `decon --version` reporting per-crate
