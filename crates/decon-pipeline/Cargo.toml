@@ -16,6 +16,9 @@ decon-core = { path = "../decon-core" }
 decon-crawl = { path = "../decon-crawl" }
 decon-llm = { path = "../decon-llm" }
 thiserror = "2.0"
+flate2 = "1"
+base64 = "0.22"
+serde_json = "1"
 
 [dev-dependencies]
 # Pinned because prompt syntax is sensitive to minijinja/Jinja2 behavior and

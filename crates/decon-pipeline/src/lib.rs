@@ -6,13 +6,16 @@
 //! order → chapters → setup → overview → combine). Checkpoint format follows
 //! ADR 0001 (content-addressed manifest, not a monolithic JSON blob).
 //!
-//! Milestone 1 delivers [`dry_run::dry_run`]; later milestones add LLM stages —
+//! Milestone 1 delivers [`dry_run::dry_run`]; Milestone 2 adds
+//! [`checkpoint_store::CheckpointStore`]. Later milestones add LLM stages —
 //! see `docs/move-to-rust.md` §2.2 and §5.
 
 #![deny(missing_docs)]
 
+pub mod checkpoint_store;
 pub mod dry_run;
 
+pub use checkpoint_store::{CheckpointStore, CheckpointStoreError, records_from_files};
 pub use dry_run::{DryRunError, DryRunPlan, dry_run, dry_run_with_budget};
 
 /// The version of this crate, as declared in `Cargo.toml`.
