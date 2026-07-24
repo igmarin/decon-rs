@@ -247,6 +247,11 @@ name = "decon-llm"
 version = "0.1.0"
 dependencies = [
  "decon-core",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
 ]
 
 [[package]]
