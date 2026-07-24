@@ -43,7 +43,8 @@ pub enum LlmError {
     Provider {
         /// HTTP status code returned by the provider.
         status: u16,
-        /// Raw response body (truncated by clients if very large).
+        /// Raw response body. Real clients should truncate this to avoid leaking
+        /// secrets or excessive log volume in error messages.
         body: String,
     },
     /// The provider response could not be parsed into completion text.

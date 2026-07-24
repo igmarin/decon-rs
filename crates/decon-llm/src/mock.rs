@@ -78,7 +78,9 @@ impl MockClient {
     /// Create a mock that always returns `response` for every call.
     #[must_use]
     pub fn new(response: impl Into<String>) -> Self {
-        Self::with_responses(vec![response.into()])
+        Self {
+            state: Mutex::new(MockState::new(vec![response.into()])),
+        }
     }
 
     /// Create a mock that returns `responses` in order, one per call.
@@ -86,20 +88,19 @@ impl MockClient {
     /// After the sequence is exhausted, the last response is repeated for
     /// any further calls.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if `responses` is empty — a mock must have at least one
-    /// response to return. This is a programmer error in test setup, not a
-    /// runtime condition.
-    #[must_use]
-    pub fn with_responses(responses: Vec<String>) -> Self {
-        assert!(
-            !responses.is_empty(),
-            "MockClient::with_responses requires at least one response",
-        );
-        Self {
-            state: Mutex::new(MockState::new(responses)),
+    /// Returns [`LlmError::Parse`] if `responses` is empty — a mock must
+    /// have at least one response to return.
+    pub fn with_responses(responses: Vec<String>) -> Result<Self, LlmError> {
+        if responses.is_empty() {
+            return Err(LlmError::parse(
+                "MockClient::with_responses requires at least one response",
+            ));
         }
+        Ok(Self {
+            state: Mutex::new(MockState::new(responses)),
+        })
     }
 
     /// Configure the mock to fail on the `call_index`-th call (0-based),
@@ -158,10 +159,10 @@ impl std::fmt::Debug for MockClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let state = lock(&self.state);
         f.debug_struct("MockClient")
-            .field("responses", &state.responses)
+            .field("responses_len", &state.responses.len())
             .field("next", &state.next)
             .field("calls", &state.calls)
-            .field("fail_on", &state.fail_on.is_some())
+            .field("has_fail_on", &state.fail_on.is_some())
             .finish()
     }
 }
@@ -193,13 +194,20 @@ mod tests {
             "first".to_string(),
             "second".to_string(),
             "third".to_string(),
-        ]);
+        ])
+        .unwrap();
         assert_eq!(client.complete("1").await.unwrap(), "first");
         assert_eq!(client.complete("2").await.unwrap(), "second");
         assert_eq!(client.complete("3").await.unwrap(), "third");
         // After exhaustion, the last response repeats.
         assert_eq!(client.complete("4").await.unwrap(), "third");
         assert_eq!(client.call_count(), 4);
+    }
+
+    #[tokio::test]
+    async fn with_responses_empty_returns_error() {
+        let err = MockClient::with_responses(vec![]).unwrap_err();
+        assert!(matches!(err, LlmError::Parse { .. }), "got: {err:?}");
     }
 
     #[tokio::test]
@@ -269,6 +277,7 @@ mod tests {
     async fn sequence_with_failure_interleaved() {
         let client =
             MockClient::with_responses(vec!["a".to_string(), "b".to_string(), "c".to_string()])
+                .unwrap()
                 .fail_on(1, LlmError::parse("bad json"));
 
         assert_eq!(client.complete("1").await.unwrap(), "a");
