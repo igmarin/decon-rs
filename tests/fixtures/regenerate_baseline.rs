@@ -68,6 +68,8 @@ struct FilterStats {
 /// root scaffolding, recording the resulting stats.
 struct ScopedRun {
     scope: Vec<String>,
+    /// Relative paths retained after filtering (crawl order preserved).
+    files: Vec<String>,
     filter_stats: FilterStats,
 }
 
@@ -206,7 +208,7 @@ fn is_shared_module(key: &str) -> bool {
 fn filter_files_by_scope(files: &[String], scope: &[String]) -> ScopedRun {
     let scope_set: BTreeMap<String, ()> = scope.iter().map(|s| (s.clone(), ())).collect();
 
-    let mut after_files: Vec<&String> = Vec::new();
+    let mut after_files: Vec<String> = Vec::new();
     let mut kept_shared = 0;
 
     for file in files {
@@ -214,7 +216,7 @@ fn filter_files_by_scope(files: &[String], scope: &[String]) -> ScopedRun {
         let in_scope = scope_set.contains_key(&key);
         let is_shared = is_shared_module(&key);
         if in_scope || is_shared {
-            after_files.push(file);
+            after_files.push(file.clone());
             if is_shared && !in_scope {
                 kept_shared += 1;
             }
@@ -224,12 +226,14 @@ fn filter_files_by_scope(files: &[String], scope: &[String]) -> ScopedRun {
     let mut module_keys: Vec<String> = scope.to_vec();
     module_keys.sort_by(|a, b| module_sort_key(a).cmp(&module_sort_key(b)));
 
+    let after = after_files.len();
     ScopedRun {
         scope: scope.to_vec(),
+        files: after_files,
         filter_stats: FilterStats {
             filtered: true,
             before: files.len(),
-            after: after_files.len(),
+            after,
             kept_shared,
             module_keys,
         },
@@ -458,6 +462,9 @@ fn emit_fixture(name: &str, fb: &FixtureBaseline) -> String {
             s.push_str(&format!("{ind}{ind}{ind}{{\n"));
             s.push_str(&format!("{ind}{ind}{ind}{ind}\"scope\": "));
             s.push_str(&emit_string_array(&run.scope, 4));
+            s.push_str(&format!(",\n"));
+            s.push_str(&format!("{ind}{ind}{ind}{ind}\"files\": "));
+            s.push_str(&emit_string_array(&run.files, 4));
             s.push_str(&format!(",\n"));
             s.push_str(&format!("{ind}{ind}{ind}{ind}\"filter_stats\": {{\n"));
             s.push_str(&format!(

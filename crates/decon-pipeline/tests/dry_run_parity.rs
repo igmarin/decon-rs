@@ -179,6 +179,15 @@ fn dry_run_umbrella_scoped_runs_match_baseline() {
             dry_run(&root, Some(&scope_keys)).unwrap_or_else(|e| panic!("scoped dry_run: {e}"));
         assert_filter_stats(&plan.filter_stats, &run["filter_stats"]);
         assert_eq!(plan.files.len(), plan.filter_stats.after);
+        // Exact scoped inventory (not only counts / a few exclusions).
+        let expected_files: Vec<&str> = run["files"]
+            .as_array()
+            .expect("scoped_runs[].files")
+            .iter()
+            .map(|v| v.as_str().expect("file str"))
+            .collect();
+        let actual_files: Vec<&str> = plan.files.iter().map(String::as_str).collect();
+        assert_eq!(actual_files, expected_files, "scope={:?}", scope_keys);
         // Full-repo modules inventory still reflects unscoped discovery
         assert!(plan.modules.iter().any(|m| m.key.as_str() == "apps/gamma"));
         // Scoped working set excludes out-of-scope apps

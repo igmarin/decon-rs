@@ -85,6 +85,14 @@
         "scope": [
           "apps/alpha"
         ],
+        "files": [
+          ".env.example",
+          "README.md",
+          "apps/alpha/lib/alpha.ex",
+          "apps/alpha/mix.exs",
+          "config/config.exs",
+          "mix.exs"
+        ],
         "filter_stats": {
           "filtered": true,
           "before": 10,
@@ -99,6 +107,16 @@
         "scope": [
           "apps/alpha",
           "apps/beta"
+        ],
+        "files": [
+          ".env.example",
+          "README.md",
+          "apps/alpha/lib/alpha.ex",
+          "apps/alpha/mix.exs",
+          "apps/beta/lib/beta.ex",
+          "apps/beta/mix.exs",
+          "config/config.exs",
+          "mix.exs"
         ],
         "filter_stats": {
           "filtered": true,

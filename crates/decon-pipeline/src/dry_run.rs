@@ -15,9 +15,10 @@ use decon_crawl::{CrawlError, crawl_local};
 use thiserror::Error;
 
 /// Full dry-run plan for a repository root (zero LLM calls).
+#[must_use]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DryRunPlan {
-    /// Absolute root that was crawled.
+    /// Root path supplied to [`dry_run`] / [`dry_run_with_budget`] (may be relative).
     pub root: PathBuf,
     /// Relative file inventory after optional scope filter (POSIX `/`).
     pub files: Vec<String>,
@@ -52,6 +53,15 @@ pub enum DryRunError {
         /// Underlying I/O error.
         #[source]
         source: std::io::Error,
+    },
+    /// File byte length does not fit in `usize` on this platform (e.g. multi-GiB
+    /// file on a 32-bit target). Prefer failing loudly over silently clamping.
+    #[error("file size overflow for {path}: {size} bytes exceeds usize::MAX")]
+    FileSizeOverflow {
+        /// Path that was too large to represent as `usize` chars.
+        path: PathBuf,
+        /// Raw size from metadata (`u64`).
+        size: u64,
     },
 }
 
@@ -159,7 +169,15 @@ fn estimate_budget_for_files(
     for rel in files {
         let full = root.join(rel);
         let chars = match fs::metadata(&full) {
-            Ok(m) => usize::try_from(m.len()).unwrap_or(usize::MAX),
+            Ok(m) => match usize::try_from(m.len()) {
+                Ok(n) => n,
+                Err(_) => {
+                    return Err(DryRunError::FileSizeOverflow {
+                        path: full,
+                        size: m.len(),
+                    });
+                }
+            },
             Err(source) => {
                 return Err(DryRunError::Io { path: full, source });
             }
@@ -208,6 +226,35 @@ mod tests {
             matches!(err, DryRunError::Io { .. }),
             "expected Io error, got: {err}"
         );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dry_run_with_budget_respects_custom_config() {
+        let dir = unique_temp_dir();
+        // 100-byte file exceeds a tiny max_file_chars so truncated_file_count ticks.
+        fs::write(dir.join("big.txt"), "x".repeat(100)).expect("write big.txt");
+        let cfg = BudgetConfig {
+            max_file_chars: 10,
+            batch_char_budget: 50,
+            chars_per_token: 4,
+            max_full_files_per_module: 40,
+        };
+        let plan = dry_run_with_budget(&dir, None, &cfg).expect("custom budget dry-run");
+        assert_eq!(plan.budget.file_count, 1);
+        assert_eq!(plan.budget.raw_chars, 100);
+        assert!(
+            plan.budget.truncated_file_count >= 1,
+            "expected truncation under max_file_chars=10, got {:?}",
+            plan.budget
+        );
+        assert!(
+            plan.budget.budgeted_chars < plan.budget.raw_chars,
+            "budgeted should be capped below raw"
+        );
+        // Default path would use max_file_chars=12_000 and not truncate this file.
+        let default_plan = dry_run(&dir, None).expect("default budget");
+        assert_eq!(default_plan.budget.truncated_file_count, 0);
         let _ = fs::remove_dir_all(&dir);
     }
 }
