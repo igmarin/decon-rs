@@ -14,6 +14,7 @@
 
 pub mod budget;
 pub mod diagrams;
+pub mod eval;
 pub mod mermaid;
 pub mod module;
 pub mod scope;
@@ -29,6 +30,11 @@ pub use budget::{
 pub use diagrams::{
     DiagramEdge, learning_path_flowchart, module_inventory_flowchart, module_inventory_from_counts,
     system_map_flowchart,
+};
+pub use eval::{
+    DEFAULT_EVAL_PASS_THRESHOLD, EvalChecks, EvalReport, TutorialFile, WEIGHT_EVIDENCE_FOOTER,
+    WEIGHT_INDEX_MERMAID, WEIGHT_INDEX_PRESENT, WEIGHT_LINKS_RESOLVE, WEIGHT_MERMAID_VALID,
+    WEIGHT_PATH_CITATIONS, WEIGHT_SETUP_OR_OVERVIEW, evaluate_tutorial,
 };
 pub use mermaid::{
     MAX_LABEL_CHARS, MAX_SEQUENCE_PARTICIPANTS, ValidateResult, participant_line, sanitize_label,
