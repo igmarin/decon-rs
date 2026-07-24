@@ -66,8 +66,9 @@ pub enum DryRunError {
 ///
 /// # Errors
 ///
-/// Propagates crawl failures and I/O when reading file metadata for budgets.
-/// A missing README is treated as empty content (score gaps), not an error.
+/// Propagates crawl failures and I/O when reading file metadata for budgets
+/// or when README.md exists but cannot be read (e.g. permission denied).
+/// A **missing** README is treated as empty content (score gaps), not an error.
 ///
 /// # Examples
 ///
@@ -108,7 +109,18 @@ pub fn dry_run_with_budget(
     // Setup always uses the full inventory (baseline parity); evaluate before
     // we possibly move `all_files` into the unscoped working set.
     let readme_path = root.join("README.md");
-    let readme = fs::read_to_string(&readme_path).unwrap_or_default();
+    // Tolerate a missing README only; other I/O errors (permissions, EISDIR, …)
+    // must surface as DryRunError::Io so setup is not silently wrong.
+    let readme = match fs::read_to_string(&readme_path) {
+        Ok(content) => content,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(source) => {
+            return Err(DryRunError::Io {
+                path: readme_path,
+                source,
+            });
+        }
+    };
     let setup = assess_setup(&readme, all_files.iter().map(String::as_str));
 
     let (files, filter_stats) = match scope {
@@ -159,4 +171,43 @@ fn estimate_budget_for_files(
         });
     }
     Ok(estimate_budget(&sizes, config))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("decon-pipeline-dry-run-{nanos}"));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    #[test]
+    fn missing_readme_is_tolerated_as_empty() {
+        let dir = unique_temp_dir();
+        // Empty tree: crawl succeeds; no README.md → empty string, not an error.
+        let plan = dry_run(&dir, None).expect("missing README must not fail dry-run");
+        assert!(!plan.setup.signals.has_readme);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unreadable_readme_returns_io_error() {
+        let dir = unique_temp_dir();
+        // A directory named README.md makes read_to_string fail with a non-NotFound
+        // error (IsADirectory / InvalidInput depending on OS) — not silently empty.
+        fs::create_dir(dir.join("README.md")).expect("create README.md as directory");
+        let err = dry_run(&dir, None).expect_err("unreadable README must be DryRunError::Io");
+        assert!(
+            matches!(err, DryRunError::Io { .. }),
+            "expected Io error, got: {err}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
