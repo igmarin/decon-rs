@@ -95,8 +95,17 @@ commit. PRs also receive an automated rs-guard review from GitHub Actions.
 
 ## Coverage gate
 
-The project targets **≥ 85% line coverage** on `decon-core` + `decon-crawl`
-(M1 exit). Workspace-wide hard fail remains an M2 CI gate. We use
+CI enforces **≥ 85% workspace line coverage** via
+`cargo llvm-cov --workspace --fail-under-lines 85` (M2). See
+[`docs/m2-coverage-baseline.md`](docs/m2-coverage-baseline.md).
+
+Locally:
+
+```bash
+cargo llvm-cov --workspace --fail-under-lines 85
+```
+
+We use
 `cargo-llvm-cov`:
 
 ```bash

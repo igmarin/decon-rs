@@ -64,11 +64,9 @@ jobs:
           rustc tests/fixtures/regenerate_baseline.rs -o /tmp/regen_baseline
           /tmp/regen_baseline tests/fixtures/ --check
 
-  # Coverage is report-only for now: it must be visible on every PR, but the
-  # ≥85% gate (failing the build below threshold) is Milestone 2 scope, once
-  # decon-core has real domain logic worth measuring. See issue #2 / #(M2).
+  # M2 hard gate: fail under 85% workspace line coverage (see docs/m2-coverage-baseline.md).
   coverage:
-    name: Coverage (report only)
+    name: Coverage (≥85% lines)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -81,12 +79,16 @@ jobs:
       - uses: taiki-e/install-action@c44f6b046f1c29ae5918b1e0bfdbb2f1813836fd
         with:
           tool: cargo-llvm-cov
-      - name: Generate coverage
-        run: cargo llvm-cov --workspace --lcov --output-path target/lcov.info
+      - name: Coverage with fail-under 85% lines
+        run: |
+          cargo llvm-cov --workspace --lcov --output-path target/lcov.info \
+            --fail-under-lines 85
       - name: Print coverage summary
+        if: always()
         run: cargo llvm-cov report --summary-only
       # Pinned from actions/upload-artifact@v7.0.1
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
         with:
           name: lcov.info
           path: target/lcov.info
