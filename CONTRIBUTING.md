@@ -16,8 +16,11 @@ cd decon-rs
 # Build the whole workspace
 cargo build --workspace
 
-# Run the CLI (currently only --help / --version)
+# Run the CLI
 cargo run -p decon-cli -- --help
+cargo run -p decon-cli -- crawl --dir tests/fixtures/python-lib
+cargo run -p decon-cli -- dry-run --dir tests/fixtures/umbrella --format json
+cargo run -p decon-cli -- eval --out tests/fixtures/tutorials/good-mini
 ```
 
 ## Development workflow
@@ -61,10 +64,39 @@ rustc tests/fixtures/regenerate_baseline.rs -o /tmp/regen_baseline && \
   /tmp/regen_baseline tests/fixtures/ --check
 ```
 
+
+## Pre-commit review (rs-guard)
+
+Before committing non-trivial changes on a feature branch:
+
+```bash
+git add -A   # stage the change set you intend to commit
+rs-guard --prompt-file .github/review-prompt.md
+```
+
+Address Critical / Security / Important findings (or document why not), then
+commit. PRs also receive an automated rs-guard review from GitHub Actions.
+
+
+## Domain modules (M1)
+
+| Area | Crate / path | Notes |
+|------|----------------|-------|
+| Module keys / inventory | `decon-core::module` | Pure |
+| Scope filter (`--apps`) | `decon-core::scope` | Pure |
+| Setup assessment | `decon-core::setup` | Pure |
+| Context budget | `decon-core::budget` | Pure |
+| Mermaid sanitize | `decon-core::mermaid` | Pure; table-driven tests |
+| Index diagrams | `decon-core::diagrams` | Always sanitize/validate |
+| Structural eval | `decon-core::eval` | Fixtures under `tests/fixtures/tutorials/` |
+| Local crawl | `decon-crawl::local` | FS I/O |
+| Dry-run plan | `decon-pipeline::dry_run` | Orchestration |
+| CLI | `decon-cli` | Thin wrappers + `assert_cmd` tests |
+
 ## Coverage gate
 
-The project targets **≥ 85% line coverage** for the workspace and **≥ 90%**
-for `decon-core` once it contains real domain logic. We use
+The project targets **≥ 85% line coverage** on `decon-core` + `decon-crawl`
+(M1 exit). Workspace-wide hard fail remains an M2 CI gate. We use
 `cargo-llvm-cov`:
 
 ```bash

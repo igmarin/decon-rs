@@ -17,14 +17,14 @@ for the full migration design.
 
 ## Current status
 
-**Milestone 0 (Spec Freeze & Workspace Scaffold) — complete.**
-Milestone 1 (Crawl + Dry-run + Eval) is next.
+**Milestone 1 (Crawl + Dry-run + Eval) — complete.**
+Zero LLM spend. M2 (checkpoint/config + coverage hard gate) is next.
 
 | Milestone | Goal | Status |
 |-----------|------|--------|
 | **M0** — Spec Freeze | Workspace layout, CI, CONTRIBUTING, ADR 0001, prompt catalog, test fixtures, parity baseline | ✅ Done |
-| **M1** — Crawl + Dry-run + Eval | `decon crawl` / dry-run matching `baseline.json`; mermaid sanitize; setup-assessment parity; `decon eval` port | 🔜 Next |
-| **M2** — Checkpoint, Config & Coverage | Content-addressed checkpoint (ADR 0001); `decon.toml`; ≥85% coverage gate | Planned |
+| **M1** — Crawl + Dry-run + Eval | `decon crawl` / dry-run matching `baseline.json`; mermaid sanitize; setup-assessment parity; `decon eval` port | ✅ Done |
+| **M2** — Checkpoint, Config & Coverage | Content-addressed checkpoint (ADR 0001); `decon.toml`; ≥85% coverage gate | 🔜 Next |
 | **M3** — LLM Identify | `LlmClient` trait + provider clients; map/reduce identify; checkpoint resume | Planned |
 | **M4** — Full Generate | Relationships → order → chapters → setup → overview → combine; Spanish chrome; `--each-app` | Planned |
 | **M5** — Product Polish | Installers, man page, shell completions, concurrency, error UX | Planned |
@@ -33,24 +33,39 @@ Milestone 1 (Crawl + Dry-run + Eval) is next.
 
 - **Cargo workspace** with five crates: `decon-core`, `decon-crawl`,
   `decon-llm`, `decon-pipeline`, `decon-cli`.
-- **CLI binary** (`decon --help`, `decon --version`) with clap argument parsing.
-- **CI pipeline**: fmt, clippy (`-D warnings`), test, coverage report, doc
-  build (`-D warnings`), `cargo audit`, fixture baseline check.
-- **Prompt catalog** (`prompts/`): 10 Jinja2/minijinja templates ported from
-  the Python reference, with render tests and a variable-schema README.
-- **Test fixtures** (`tests/fixtures/`): three minimal repos (Python lib,
-  Elixir umbrella, TypeScript package) with a frozen `baseline.json` parity
-  oracle and a pure-Rust regenerator (`regenerate_baseline.rs`).
-- **ADR 0001**: checkpoint schema v1 (content-addressed manifest, not
-  monolithic JSON).
-- **AI code review**: automated [rs-guard](https://github.com/nebulaideas/rs-guard)
-  reviews on every PR.
+- **CLI (M1):**
+  - `decon crawl --dir PATH [--format text|json]` — local file inventory
+  - `decon dry-run --dir PATH [--apps …] [--format text|json]` — crawl + scope +
+    setup assessment + budget (zero LLM)
+  - `decon eval --out PATH` — structural tutorial quality gate (zero LLM)
+- **`decon-core` pure helpers:** module keys, monorepo scope, setup scoring,
+  context budget, Mermaid sanitize/validate, index diagram builders, structural
+  eval.
+- **Parity fixtures:** `tests/fixtures/{python-lib,umbrella,js-lib}` + frozen
+  `baseline.json`; tutorial goldens under `tests/fixtures/tutorials/`.
+- **CI pipeline:** fmt, clippy (`-D warnings`), test, coverage report, doc,
+  `cargo audit`, fixture baseline check, rs-guard PR review.
+- **Prompt catalog** (`prompts/`) and **ADR 0001** checkpoint schema (used from M2+).
+
+### Quick start (M1)
+
+```bash
+cargo build -p decon-cli
+
+# Inventory a repo
+cargo run -p decon-cli -- crawl --dir tests/fixtures/python-lib --format json
+
+# Dry-run plan (optionally scope monorepo apps)
+cargo run -p decon-cli -- dry-run --dir tests/fixtures/umbrella --apps apps/alpha
+
+# Structural eval of a tutorial tree
+cargo run -p decon-cli -- eval --out tests/fixtures/tutorials/good-mini
+```
 
 ### What does not work yet
 
-No crawl, dry-run, LLM calls, chapter generation, or eval. The crates are
-scaffolded with rustdoc and version constants only — real domain logic starts
-in M1.
+LLM providers, checkpoint resume, full `generate` pipeline, chapter writing,
+and combine/index chrome. Those land in M2–M4.
 
 ---
 
