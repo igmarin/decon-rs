@@ -18,10 +18,18 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 /// Inventory of files discovered under a repository root.
+///
+/// `files` and `sizes` are parallel arrays: `sizes[i]` is the byte length of
+/// `files[i]`, obtained via `fs::metadata` (which **follows symlinks**, matching
+/// the classification logic that uses `Path::is_file`). This lets downstream
+/// budget estimation skip a second full re-stat of every path.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CrawlResult {
     /// Relative file paths using `/` separators, sorted ascending.
     pub files: Vec<String>,
+    /// Byte length of each file, parallel to [`Self::files`] (same length and
+    /// order). `sizes[i]` is the size of `files[i]`, following symlinks.
+    pub sizes: Vec<u64>,
 }
 
 impl CrawlResult {
@@ -29,6 +37,19 @@ impl CrawlResult {
     #[must_use]
     pub fn file_count(&self) -> usize {
         self.files.len()
+    }
+
+    /// Iterate over `(path, size)` pairs, zipping [`Self::files`] and
+    /// [`Self::sizes`].
+    ///
+    /// Because the two vectors are always the same length, every file is
+    /// paired with its size. The returned iterator is already `#[must_use]`
+    /// via `impl Iterator`, so no separate attribute is needed.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, u64)> {
+        self.files
+            .iter()
+            .map(String::as_str)
+            .zip(self.sizes.iter().copied())
     }
 }
 
@@ -54,22 +75,23 @@ pub enum CrawlError {
 
 /// Inventory files under `root` (iterative walk; no recursion stack risk).
 ///
-/// Returns sorted relative paths. Hidden directories are skipped; hidden
-/// files are included.
+/// Returns sorted relative paths with their byte sizes (following symlinks
+/// via `fs::metadata`). Hidden directories are skipped; hidden files are
+/// included.
 ///
 /// ## Symlinks
 ///
 /// Entries are classified with `Path::is_file` / `is_dir`, which **follow**
 /// symlinks (same as a plain `read_dir` walk). Inventory paths are always
-/// relative to `root` as discovered under the tree (the symlink’s path), never
+/// relative to `root` as discovered under the tree (the symlink's path), never
 /// the absolute target path:
 ///
-/// - A **file** symlink `leak.txt` → outside file is listed as `leak.txt`.
-/// - A **directory** symlink `out_link` → outside dir is descended into; files
-///   appear as `out_link/…` (still under `root` via the link path).
+/// - A **file** symlink `leak.txt` -> outside file is listed as `leak.txt`.
+/// - A **directory** symlink `out_link` -> outside dir is descended into; files
+///   appear as `out_link/...` (still under `root` via the link path).
 ///
 /// Paths that cannot be expressed relative to `root` are omitted.
-/// Infinite symlink loops are not specially detected — do not crawl
+/// Infinite symlink loops are not specially detected -- do not crawl
 /// pathological trees.
 ///
 /// # Errors
@@ -99,9 +121,11 @@ pub fn crawl_local(root: impl AsRef<Path>) -> Result<CrawlResult, CrawlError> {
         return Err(CrawlError::NotADirectory(root.to_path_buf()));
     }
 
-    let mut files = crawl_tree(root)?;
-    files.sort();
-    Ok(CrawlResult { files })
+    let mut entries = crawl_tree(root)?;
+    // Sort by path, keeping sizes parallel.
+    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+    let (files, sizes) = entries.into_iter().unzip();
+    Ok(CrawlResult { files, sizes })
 }
 
 /// Whether a directory/file **name** is hidden (leading `.`), without lossy UTF-8.
@@ -130,8 +154,8 @@ fn relative_posix(root: &Path, path: &Path) -> Result<Option<String>, CrawlError
     Ok(Some(s.replace('\\', "/")))
 }
 
-fn crawl_tree(root: &Path) -> Result<Vec<String>, CrawlError> {
-    let mut files: Vec<String> = Vec::new();
+fn crawl_tree(root: &Path) -> Result<Vec<(String, u64)>, CrawlError> {
+    let mut files: Vec<(String, u64)> = Vec::new();
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
 
     while let Some(dir) = stack.pop() {
@@ -150,7 +174,15 @@ fn crawl_tree(root: &Path) -> Result<Vec<String>, CrawlError> {
 
             if path.is_file() {
                 if let Some(rel) = relative_posix(root, &path)? {
-                    files.push(rel);
+                    // Use `fs::metadata` (follows symlinks) to match the
+                    // classification via `Path::is_file` and the prior
+                    // dry_run behavior. `DirEntry::metadata` would return
+                    // symlink metadata (lstat) instead of the target size.
+                    // On metadata error, skip the file (best-effort walk,
+                    // matching the existing treatment of unreadable dirs).
+                    if let Ok(meta) = fs::metadata(&path) {
+                        files.push((rel, meta.len()));
+                    }
                 }
             } else if path.is_dir() {
                 stack.push(path);
@@ -352,5 +384,95 @@ mod tests {
         // Both the real file and the symlink path appear as files under root.
         assert!(result.files.contains(&"target.txt".to_owned()));
         assert!(result.files.contains(&"alias.txt".to_owned()));
+    }
+
+    #[test]
+    fn sizes_match_known_file_lengths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+
+        File::create(root.join("a.txt"))
+            .and_then(|mut f| f.write_all(b"hello")) // 5 bytes
+            .expect("a.txt");
+        File::create(root.join("b.txt"))
+            .and_then(|mut f| f.write_all(b"world!")) // 6 bytes
+            .expect("b.txt");
+
+        let result = crawl_local(root).expect("crawl");
+        assert_eq!(result.files.len(), result.sizes.len());
+        // files are sorted: a.txt, b.txt
+        assert_eq!(result.files, vec!["a.txt".to_owned(), "b.txt".to_owned()]);
+        assert_eq!(result.sizes, vec![5, 6]);
+    }
+
+    #[test]
+    fn empty_file_is_inventoried_with_size_zero() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+
+        File::create(root.join("empty.txt")).expect("touch empty");
+        File::create(root.join("nonempty.txt"))
+            .and_then(|mut f| f.write_all(b"x"))
+            .expect("nonempty");
+
+        let result = crawl_local(root).expect("crawl");
+        assert_eq!(result.files.len(), result.sizes.len());
+        let empty_idx = result
+            .files
+            .iter()
+            .position(|f| f == "empty.txt")
+            .expect("empty.txt inventoried");
+        assert_eq!(result.sizes[empty_idx], 0);
+    }
+
+    #[test]
+    fn fixture_sizes_populated_and_parallel_to_files() {
+        let root = fixtures_dir().join("python-lib");
+        let result = crawl_local(&root).expect("crawl python-lib");
+        assert_eq!(result.sizes.len(), result.files.len());
+        // Every non-empty fixture file should report a positive size.
+        for (path, size) in result.iter() {
+            assert!(
+                size > 0,
+                "fixture file {path} should be non-empty (size {size})"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlink_size_follows_target() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().expect("root tempdir");
+        let target = root.path().join("target.txt");
+        File::create(&target)
+            .and_then(|mut f| f.write_all(b"target-data")) // 11 bytes
+            .expect("target");
+        symlink(&target, root.path().join("alias.txt")).expect("symlink");
+
+        let result = crawl_local(root.path()).expect("crawl");
+        assert_eq!(result.files.len(), result.sizes.len());
+        let alias_idx = result
+            .files
+            .iter()
+            .position(|f| f == "alias.txt")
+            .expect("alias.txt inventoried");
+        // Size follows the symlink to the target's 11 bytes, NOT the symlink
+        // lstat size (which would be the length of the target path string).
+        assert_eq!(result.sizes[alias_idx], 11);
+    }
+
+    #[test]
+    fn iter_yields_path_size_pairs() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        File::create(root.join("a.txt"))
+            .and_then(|mut f| f.write_all(b"abc"))
+            .expect("a.txt");
+
+        let result = crawl_local(root).expect("crawl");
+        let pairs: Vec<(&str, u64)> = result.iter().collect();
+        assert_eq!(pairs, vec![("a.txt", 3)]);
     }
 }

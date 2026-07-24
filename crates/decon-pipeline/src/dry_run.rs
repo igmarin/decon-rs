@@ -3,6 +3,7 @@
 //! Assembles the Milestone 1 plan used by `decon dry-run`. Parity with
 //! `tests/fixtures/baseline.json` is enforced by integration tests.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -68,16 +69,16 @@ pub enum DryRunError {
 /// Build a dry-run plan for `root`, optionally scoping to `apps` / modules.
 ///
 /// Steps:
-/// 1. [`crawl_local`] — sorted relative inventory  
-/// 2. [`discover_modules`] on the full inventory  
-/// 3. Optional [`filter_files_by_scope`] (or unscoped stats)  
-/// 4. [`assess_setup`] from `README.md` + **full** inventory (parity with baseline)  
-/// 5. [`estimate_budget`] on the working (scoped) file set with on-disk sizes  
+/// 1. [`crawl_local`] -- sorted relative inventory with per-file byte sizes
+/// 2. [`discover_modules`] on the full inventory
+/// 3. Optional [`filter_files_by_scope`] (or unscoped stats)
+/// 4. [`assess_setup`] from `README.md` + **full** inventory (parity with baseline)
+/// 5. [`estimate_budget`] on the working (scoped) file set using crawl sizes
 ///
 /// # Errors
 ///
-/// Propagates crawl failures and I/O when reading file metadata for budgets
-/// or when README.md exists but cannot be read (e.g. permission denied).
+/// Propagates crawl failures and I/O when reading the README for setup scoring,
+/// or when a crawl-reported file size does not fit in `usize` on this platform.
 /// A **missing** README is treated as empty content (score gaps), not an error.
 ///
 /// # Examples
@@ -114,12 +115,13 @@ pub fn dry_run_with_budget(
     let root = root.as_ref();
     let crawl = crawl_local(root)?;
     let all_files = crawl.files;
+    let all_sizes = crawl.sizes;
     let modules = discover_modules(all_files.iter().map(String::as_str));
 
     // Setup always uses the full inventory (baseline parity); evaluate before
     // we possibly move `all_files` into the unscoped working set.
     let readme_path = root.join("README.md");
-    // Tolerate a missing README only; other I/O errors (permissions, EISDIR, …)
+    // Tolerate a missing README only; other I/O errors (permissions, EISDIR, ...)
     // must surface as DryRunError::Io so setup is not silently wrong.
     let readme = match fs::read_to_string(&readme_path) {
         Ok(content) => content,
@@ -133,19 +135,32 @@ pub fn dry_run_with_budget(
     };
     let setup = assess_setup(&readme, all_files.iter().map(String::as_str));
 
-    let (files, filter_stats) = match scope {
+    let (files, sizes, filter_stats) = match scope {
         None => {
-            // Common path: move inventory — no clone.
+            // Common path: move inventory -- no clone.
             let stats = unscoped_filter_stats(all_files.len(), &modules);
-            (all_files, stats)
+            (all_files, all_sizes, stats)
         }
         Some(keys) => {
             let filtered = filter_files_by_scope(all_files.iter().map(String::as_str), keys);
-            (filtered.files, filtered.stats)
+            // Keep sizes parallel to the filtered file list. Build a lookup
+            // from path -> size so we can map each kept file to its byte length
+            // without re-statting the filesystem.
+            let size_map: HashMap<&str, u64> = all_files
+                .iter()
+                .zip(all_sizes.iter())
+                .map(|(f, s)| (f.as_str(), *s))
+                .collect();
+            let filtered_sizes: Vec<u64> = filtered
+                .files
+                .iter()
+                .map(|f| size_map.get(f.as_str()).copied().unwrap_or(0))
+                .collect();
+            (filtered.files, filtered_sizes, filtered.stats)
         }
     };
 
-    let budget = estimate_budget_for_files(root, &files, budget_config)?;
+    let budget = estimate_budget_for_files(&files, &sizes, budget_config)?;
 
     Ok(DryRunPlan {
         root: root.to_path_buf(),
@@ -158,37 +173,31 @@ pub fn dry_run_with_budget(
 }
 
 fn estimate_budget_for_files(
-    root: &Path,
     files: &[String],
+    sizes: &[u64],
     config: &BudgetConfig,
 ) -> Result<BudgetEstimate, DryRunError> {
-    // TODO(perf): sizes are loaded with one `metadata` syscall per file.
-    // For large monorepos, fold size collection into `crawl_local` (or a
-    // bulk walk) so dry-run does not re-stat every path.
-    let mut sizes: Vec<FileSize> = Vec::with_capacity(files.len());
-    for rel in files {
-        let full = root.join(rel);
-        let chars = match fs::metadata(&full) {
-            Ok(m) => match usize::try_from(m.len()) {
-                Ok(n) => n,
-                Err(_) => {
-                    return Err(DryRunError::FileSizeOverflow {
-                        path: full,
-                        size: m.len(),
-                    });
-                }
-            },
-            Err(source) => {
-                return Err(DryRunError::Io { path: full, source });
+    // Sizes were collected during `crawl_local` (following symlinks via
+    // `fs::metadata`), so dry-run no longer re-stats every path. We only
+    // need to convert `u64` -> `usize` for the budget model.
+    let mut file_sizes: Vec<FileSize> = Vec::with_capacity(files.len());
+    for (rel, &size) in files.iter().zip(sizes.iter()) {
+        let chars = match usize::try_from(size) {
+            Ok(n) => n,
+            Err(_) => {
+                return Err(DryRunError::FileSizeOverflow {
+                    path: PathBuf::from(rel),
+                    size,
+                });
             }
         };
-        sizes.push(FileSize {
+        file_sizes.push(FileSize {
             path: rel.clone(),
             chars,
             module: module_key(rel),
         });
     }
-    Ok(estimate_budget(&sizes, config))
+    Ok(estimate_budget(&file_sizes, config))
 }
 
 #[cfg(test)]
@@ -209,7 +218,7 @@ mod tests {
     #[test]
     fn missing_readme_is_tolerated_as_empty() {
         let dir = unique_temp_dir();
-        // Empty tree: crawl succeeds; no README.md → empty string, not an error.
+        // Empty tree: crawl succeeds; no README.md -> empty string, not an error.
         let plan = dry_run(&dir, None).expect("missing README must not fail dry-run");
         assert!(!plan.setup.signals.has_readme);
         let _ = fs::remove_dir_all(&dir);
@@ -219,7 +228,7 @@ mod tests {
     fn unreadable_readme_returns_io_error() {
         let dir = unique_temp_dir();
         // A directory named README.md makes read_to_string fail with a non-NotFound
-        // error (IsADirectory / InvalidInput depending on OS) — not silently empty.
+        // error (IsADirectory / InvalidInput depending on OS) -- not silently empty.
         fs::create_dir(dir.join("README.md")).expect("create README.md as directory");
         let err = dry_run(&dir, None).expect_err("unreadable README must be DryRunError::Io");
         assert!(
