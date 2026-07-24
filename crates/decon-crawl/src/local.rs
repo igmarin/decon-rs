@@ -1,0 +1,356 @@
+//! Local filesystem crawl: inventory of relative paths under a root.
+//!
+//! For Milestone 1, the walk matches the frozen fixture baseline
+//! (`tests/fixtures/baseline.json`):
+//!
+//! - Skip **hidden directories** (name starts with `.`)
+//! - Include **hidden files** (e.g. `.env.example`)
+//! - Emit relative POSIX paths (`/` separators), sorted lexicographically
+//! - Paths must be valid UTF-8 (non-UTF-8 names fail the crawl)
+//!
+//! `.gitignore` support (via the `ignore` crate) is deferred; fixtures do not
+//! rely on it. GitHub fetch is out of scope for this module.
+
+use std::ffi::OsStr;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use thiserror::Error;
+
+/// Inventory of files discovered under a repository root.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CrawlResult {
+    /// Relative file paths using `/` separators, sorted ascending.
+    pub files: Vec<String>,
+}
+
+impl CrawlResult {
+    /// Number of files in the inventory.
+    #[must_use]
+    pub fn file_count(&self) -> usize {
+        self.files.len()
+    }
+}
+
+/// Errors produced while crawling a local tree.
+#[derive(Debug, Error)]
+pub enum CrawlError {
+    /// The path exists but is not a directory.
+    #[error("path is not a directory: {0}")]
+    NotADirectory(PathBuf),
+    /// The path does not exist or cannot be accessed as a directory.
+    #[error("failed to access directory {path}: {source}")]
+    Io {
+        /// Directory that failed.
+        path: PathBuf,
+        /// Underlying I/O error.
+        #[source]
+        source: std::io::Error,
+    },
+    /// A path component is not valid UTF-8 (cannot form a POSIX inventory string).
+    #[error("path is not valid UTF-8: {0}")]
+    NonUtf8Path(PathBuf),
+}
+
+/// Inventory files under `root` (iterative walk; no recursion stack risk).
+///
+/// Returns sorted relative paths. Hidden directories are skipped; hidden
+/// files are included.
+///
+/// ## Symlinks
+///
+/// Entries are classified with `Path::is_file` / `is_dir`, which **follow**
+/// symlinks (same as a plain `read_dir` walk). Inventory paths are always
+/// relative to `root` as discovered under the tree (the symlink’s path), never
+/// the absolute target path:
+///
+/// - A **file** symlink `leak.txt` → outside file is listed as `leak.txt`.
+/// - A **directory** symlink `out_link` → outside dir is descended into; files
+///   appear as `out_link/…` (still under `root` via the link path).
+///
+/// Paths that cannot be expressed relative to `root` are omitted.
+/// Infinite symlink loops are not specially detected — do not crawl
+/// pathological trees.
+///
+/// # Errors
+///
+/// - [`CrawlError::NotADirectory`] if `root` exists but is not a directory
+/// - [`CrawlError::Io`] if `root` cannot be opened as a directory
+/// - [`CrawlError::NonUtf8Path`] if any inventoried path is not valid UTF-8
+///
+/// Nested unreadable directories are skipped (best-effort walk) rather than
+/// failing the whole crawl, so partial trees still produce an inventory.
+///
+/// # Examples
+///
+/// ```no_run
+/// use decon_crawl::local::crawl_local;
+///
+/// let result = crawl_local(".").expect("cwd is a directory");
+/// assert!(result.file_count() > 0);
+/// ```
+pub fn crawl_local(root: impl AsRef<Path>) -> Result<CrawlResult, CrawlError> {
+    let root = root.as_ref();
+    let meta = fs::metadata(root).map_err(|source| CrawlError::Io {
+        path: root.to_path_buf(),
+        source,
+    })?;
+    if !meta.is_dir() {
+        return Err(CrawlError::NotADirectory(root.to_path_buf()));
+    }
+
+    let mut files = crawl_tree(root)?;
+    files.sort();
+    Ok(CrawlResult { files })
+}
+
+/// Whether a directory/file **name** is hidden (leading `.`), without lossy UTF-8.
+fn is_hidden_name(name: &OsStr) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        name.as_bytes().first() == Some(&b'.')
+    }
+    #[cfg(not(unix))]
+    {
+        // Windows: OsStr is WTF-8; lossy is acceptable for the leading-dot check.
+        name.to_string_lossy().starts_with('.')
+    }
+}
+
+/// Convert `path` to a relative POSIX string under `root`, or `Ok(None)` if
+/// `path` is not under `root`.
+fn relative_posix(root: &Path, path: &Path) -> Result<Option<String>, CrawlError> {
+    let Ok(rel) = path.strip_prefix(root) else {
+        return Ok(None);
+    };
+    let Some(s) = rel.to_str() else {
+        return Err(CrawlError::NonUtf8Path(path.to_path_buf()));
+    };
+    Ok(Some(s.replace('\\', "/")))
+}
+
+fn crawl_tree(root: &Path) -> Result<Vec<String>, CrawlError> {
+    let mut files: Vec<String> = Vec::new();
+    let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let entries = match fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name();
+
+            // Skip hidden directories; allow hidden files.
+            if path.is_dir() && is_hidden_name(&name) {
+                continue;
+            }
+
+            if path.is_file() {
+                if let Some(rel) = relative_posix(root, &path)? {
+                    files.push(rel);
+                }
+            } else if path.is_dir() {
+                stack.push(path);
+            }
+        }
+    }
+
+    Ok(files)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::{self, File};
+    use std::io::Write;
+
+    fn fixtures_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures")
+    }
+
+    fn baseline_files(fixture: &str) -> Vec<String> {
+        let baseline_path = fixtures_dir().join("baseline.json");
+        let raw = fs::read_to_string(&baseline_path)
+            .unwrap_or_else(|e| panic!("read {}: {e}", baseline_path.display()));
+        let v: serde_json::Value = serde_json::from_str(&raw).expect("baseline.json is valid JSON");
+        v[fixture]["crawl"]["files"]
+            .as_array()
+            .unwrap_or_else(|| panic!("baseline missing crawl.files for {fixture}"))
+            .iter()
+            .map(|x| x.as_str().expect("file path is a string").to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn crawl_python_lib_matches_baseline() {
+        let root = fixtures_dir().join("python-lib");
+        let result = crawl_local(&root).expect("crawl python-lib");
+        let expected = baseline_files("python-lib");
+        assert_eq!(result.file_count(), expected.len());
+        assert_eq!(result.files, expected);
+    }
+
+    #[test]
+    fn crawl_umbrella_matches_baseline() {
+        let root = fixtures_dir().join("umbrella");
+        let result = crawl_local(&root).expect("crawl umbrella");
+        let expected = baseline_files("umbrella");
+        assert_eq!(result.file_count(), expected.len());
+        assert_eq!(result.files, expected);
+    }
+
+    #[test]
+    fn crawl_js_lib_matches_baseline() {
+        let root = fixtures_dir().join("js-lib");
+        let result = crawl_local(&root).expect("crawl js-lib");
+        let expected = baseline_files("js-lib");
+        assert_eq!(result.file_count(), expected.len());
+        assert_eq!(result.files, expected);
+    }
+
+    #[test]
+    fn empty_root_returns_empty_inventory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let result = crawl_local(dir.path()).expect("empty crawl");
+        assert_eq!(result, CrawlResult::default());
+        assert_eq!(result.file_count(), 0);
+    }
+
+    #[test]
+    fn hidden_directory_skipped_hidden_file_kept() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+
+        File::create(root.join(".env.example"))
+            .and_then(|mut f| f.write_all(b"KEY=1\n"))
+            .expect("hidden file");
+        File::create(root.join("visible.txt"))
+            .and_then(|mut f| f.write_all(b"ok\n"))
+            .expect("visible file");
+
+        let hidden_dir = root.join(".hidden");
+        fs::create_dir(&hidden_dir).expect("hidden dir");
+        File::create(hidden_dir.join("secret.txt"))
+            .and_then(|mut f| f.write_all(b"nope\n"))
+            .expect("file inside hidden dir");
+
+        let nested = root.join("src");
+        fs::create_dir(&nested).expect("src");
+        File::create(nested.join("main.rs"))
+            .and_then(|mut f| f.write_all(b"fn main() {}\n"))
+            .expect("nested file");
+
+        let result = crawl_local(root).expect("crawl temp tree");
+        assert_eq!(
+            result.files,
+            vec![
+                ".env.example".to_owned(),
+                "src/main.rs".to_owned(),
+                "visible.txt".to_owned(),
+            ]
+        );
+        assert!(!result.files.iter().any(|f| f.contains("secret")));
+    }
+
+    #[test]
+    fn not_a_directory_errors() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("only-file");
+        File::create(&file).expect("touch");
+        let err = crawl_local(&file).expect_err("file is not a directory");
+        assert!(matches!(err, CrawlError::NotADirectory(_)));
+    }
+
+    #[test]
+    fn missing_path_errors() {
+        let err = crawl_local("/nonexistent/decon-crawl-path-xyz").expect_err("missing");
+        assert!(matches!(err, CrawlError::Io { .. }));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn relative_posix_rejects_non_utf8_path() {
+        // macOS APFS rejects non-UTF-8 names on create; exercise the conversion
+        // path in memory instead of relying on the filesystem.
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let root = Path::new("/tmp/decon-root");
+        let bad = PathBuf::from(OsStr::from_bytes(b"/tmp/decon-root/bad\xffname.txt"));
+        let err = relative_posix(root, &bad).expect_err("non-utf8");
+        assert!(matches!(err, CrawlError::NonUtf8Path(_)));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn file_symlink_listed_even_when_target_is_outside_root() {
+        use std::os::unix::fs::symlink;
+
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        let outside_file = outside.path().join("external.txt");
+        File::create(&outside_file)
+            .and_then(|mut f| f.write_all(b"external\n"))
+            .expect("outside file");
+
+        let root = tempfile::tempdir().expect("root tempdir");
+        File::create(root.path().join("inside.txt"))
+            .and_then(|mut f| f.write_all(b"inside\n"))
+            .expect("inside file");
+
+        // Symlink path lives under root; target is outside.
+        symlink(&outside_file, root.path().join("leak.txt")).expect("create symlink");
+
+        let result = crawl_local(root.path()).expect("crawl");
+        // Listed by symlink path under root (not the absolute outside path).
+        assert_eq!(
+            result.files,
+            vec!["inside.txt".to_owned(), "leak.txt".to_owned()]
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn dir_symlink_outside_root_listed_under_link_path() {
+        use std::os::unix::fs::symlink;
+
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        File::create(outside.path().join("secret.txt"))
+            .and_then(|mut f| f.write_all(b"secret\n"))
+            .expect("outside file");
+
+        let root = tempfile::tempdir().expect("root tempdir");
+        File::create(root.path().join("inside.txt"))
+            .and_then(|mut f| f.write_all(b"inside\n"))
+            .expect("inside file");
+        symlink(outside.path(), root.path().join("out_link")).expect("dir symlink");
+
+        let result = crawl_local(root.path()).expect("crawl");
+        // Content is inventoriable via the in-tree link path (not absolute outside).
+        assert_eq!(
+            result.files,
+            vec!["inside.txt".to_owned(), "out_link/secret.txt".to_owned(),]
+        );
+        assert!(!result.files.iter().any(|f| f.starts_with('/')));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlink_to_file_inside_root_is_included() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().expect("root tempdir");
+        let target = root.path().join("target.txt");
+        File::create(&target)
+            .and_then(|mut f| f.write_all(b"data\n"))
+            .expect("target");
+        symlink(&target, root.path().join("alias.txt")).expect("symlink");
+
+        let result = crawl_local(root.path()).expect("crawl");
+        // Both the real file and the symlink path appear as files under root.
+        assert!(result.files.contains(&"target.txt".to_owned()));
+        assert!(result.files.contains(&"alias.txt".to_owned()));
+    }
+}
