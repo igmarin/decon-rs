@@ -68,6 +68,27 @@ rustc tests/fixtures/regenerate_baseline.rs -o /tmp/regen_baseline && \
 ```
 
 
+## Optional live LLM tests
+
+Live tests make **real, paid API calls** (to DeepSeek by default) and cost a
+few cents per run. They are feature-gated behind `decon-pipeline/live-llm`
+and skip automatically (printing `skipped:` to stderr) when no API key is
+present, so enabling the feature is always safe.
+
+Default CI does **not** enable `live-llm`, so these tests are never compiled
+or run there.
+
+```sh
+# Run live smoke tests (requires DEEPSEEK_API_KEY or DECON_LLM_API_KEY)
+cargo test --workspace --features decon-pipeline/live-llm \
+  --test live_smoke -- --nocapture
+```
+
+Budget is capped at `DECON_MAX_LLM_CALLS` (default `5`) calls per test via a
+`ProgressTracker`. The identify test also writes responses to a disk cache
+under `target/decon-llm-cache` so re-runs with an unchanged prompt are free.
+
+
 ## Pre-commit review (rs-guard)
 
 Before committing non-trivial changes on a feature branch:
