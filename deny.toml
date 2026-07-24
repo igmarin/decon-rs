@@ -28,6 +28,9 @@ allow = [
     "Zlib",
     "CC0-1.0",
     "0BSD",
+    # Permissive data license used by `webpki-roots` (Mozilla CA bundle for
+    # rustls-tls). Not OSI-approved but permissive — no copyleft restrictions.
+    "CDLA-Permissive-2.0",
 ]
 exceptions = []
 
