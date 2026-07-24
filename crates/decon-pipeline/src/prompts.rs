@@ -131,6 +131,17 @@ pub enum PromptError {
     /// The template failed to render (e.g. a missing or invalid variable).
     #[error("template render error: {0}")]
     Render(String),
+    /// A template failed to load/parse at renderer construction time. This is
+    /// a programming error (the embedded template source is malformed) but is
+    /// surfaced as a `Result` rather than a panic so that library crates never
+    /// abort the process — only `decon-cli::main` may terminate.
+    #[error("template load error for {id}: {message}")]
+    Load {
+        /// The template filename that failed to load.
+        id: &'static str,
+        /// The underlying minijinja error message.
+        message: String,
+    },
     /// The requested template id was not registered in the environment.
     #[error("template not found: {0}")]
     NotFound(String),
@@ -151,8 +162,14 @@ impl PromptRenderer {
     /// Auto-escaping is disabled because the templates produce Markdown/YAML
     /// prompts (not HTML); see the module-level security note for why callers
     /// must instead use [`sanitize_template_input`] on free-text variables.
-    #[must_use]
-    pub fn new() -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PromptError::Load`] if any embedded template fails to parse.
+    /// This is a programming error (the committed template source is
+    /// malformed) and is returned as a `Result` rather than panicked on, so
+    /// that library crates never abort the process.
+    pub fn new() -> Result<Self, PromptError> {
         let mut env = Environment::new();
         // Strict undefined behavior so that a missing required variable raises
         // a render error (surfaced as `PromptError::Render`) instead of
@@ -162,11 +179,16 @@ impl PromptRenderer {
         env.set_undefined_behavior(UndefinedBehavior::Strict);
         for id in PromptId::all() {
             // `add_template` parses the source eagerly; a failure here is a
-            // programming error (the embedded template is malformed), so panic.
+            // programming error (the embedded template is malformed). Propagate
+            // it as `PromptError::Load` instead of panicking — library crates
+            // must never abort the process.
             env.add_template(id.as_str(), id.template_text())
-                .unwrap_or_else(|e| panic!("failed to register template {}: {e}", id.as_str()));
+                .map_err(|e| PromptError::Load {
+                    id: id.as_str(),
+                    message: e.to_string(),
+                })?;
         }
-        Self { env }
+        Ok(Self { env })
     }
 
     /// Renders the template identified by `id` with the given `context`.
@@ -190,12 +212,6 @@ impl PromptRenderer {
         template
             .render(value)
             .map_err(|e| PromptError::Render(e.to_string()))
-    }
-}
-
-impl Default for PromptRenderer {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -241,14 +257,30 @@ mod tests {
     }
 
     #[test]
-    fn renderer_default_equals_new() {
-        let a = PromptRenderer::new();
-        let b = PromptRenderer::default();
+    fn renderer_new_is_ok_and_renders() {
+        let renderer = PromptRenderer::new().expect("renderer should construct");
         let ctx = json!({"project_name": "x", "context": "", "language_instruction": "",
             "max_abstraction_num": 5, "name_lang_hint": "", "desc_lang_hint": "",
             "file_listing": ""});
-        let ra = a.render(PromptId::IdentifySingleShot, &ctx).expect("a");
-        let rb = b.render(PromptId::IdentifySingleShot, &ctx).expect("b");
+        let out = renderer
+            .render(PromptId::IdentifySingleShot, &ctx)
+            .expect("render");
+        assert!(!out.is_empty());
+    }
+
+    #[test]
+    fn renderer_new_is_deterministic() {
+        let a = PromptRenderer::new().expect("a");
+        let b = PromptRenderer::new().expect("b");
+        let ctx = json!({"project_name": "x", "context": "", "language_instruction": "",
+            "max_abstraction_num": 5, "name_lang_hint": "", "desc_lang_hint": "",
+            "file_listing": ""});
+        let ra = a
+            .render(PromptId::IdentifySingleShot, &ctx)
+            .expect("a render");
+        let rb = b
+            .render(PromptId::IdentifySingleShot, &ctx)
+            .expect("b render");
         assert_eq!(ra, rb);
     }
 

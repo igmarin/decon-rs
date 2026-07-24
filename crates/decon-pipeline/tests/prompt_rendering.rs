@@ -75,7 +75,7 @@ fn prompt_id_template_text_is_non_empty_and_matches_file() {
 
 #[test]
 fn prompt_renderer_new_creates_a_renderer() {
-    let _renderer = PromptRenderer::new();
+    let _renderer = PromptRenderer::new().expect("renderer");
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +208,7 @@ fn write_architecture_overview_ctx() -> serde_json::Value {
 
 #[test]
 fn render_identify_single_shot_returns_non_empty_expected_content() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let out = renderer
         .render(PromptId::IdentifySingleShot, &identify_single_shot_ctx())
         .expect("identify_single_shot should render");
@@ -221,7 +221,7 @@ fn render_identify_single_shot_returns_non_empty_expected_content() {
 
 #[test]
 fn render_identify_map_returns_non_empty_expected_content() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let out = renderer
         .render(PromptId::IdentifyMap, &identify_map_ctx())
         .expect("identify_map should render");
@@ -234,7 +234,7 @@ fn render_identify_map_returns_non_empty_expected_content() {
 
 #[test]
 fn render_identify_reduce_returns_non_empty_expected_content() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let out = renderer
         .render(PromptId::IdentifyReduce, &identify_reduce_ctx())
         .expect("identify_reduce should render");
@@ -251,7 +251,7 @@ fn render_identify_reduce_returns_non_empty_expected_content() {
 
 #[test]
 fn render_is_deterministic_for_identify_single_shot() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let ctx = identify_single_shot_ctx();
     let a = renderer
         .render(PromptId::IdentifySingleShot, &ctx)
@@ -264,7 +264,7 @@ fn render_is_deterministic_for_identify_single_shot() {
 
 #[test]
 fn render_is_deterministic_for_identify_map() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let ctx = identify_map_ctx();
     let a = renderer
         .render(PromptId::IdentifyMap, &ctx)
@@ -277,7 +277,7 @@ fn render_is_deterministic_for_identify_map() {
 
 #[test]
 fn render_is_deterministic_for_identify_reduce() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let ctx = identify_reduce_ctx();
     let a = renderer
         .render(PromptId::IdentifyReduce, &ctx)
@@ -294,7 +294,7 @@ fn render_is_deterministic_for_identify_reduce() {
 
 #[test]
 fn all_templates_render_without_missing_variable_errors() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let cases: [(PromptId, serde_json::Value); 10] = [
         (PromptId::IdentifySingleShot, identify_single_shot_ctx()),
         (PromptId::IdentifyMap, identify_map_ctx()),
@@ -334,7 +334,7 @@ fn all_templates_render_without_missing_variable_errors() {
 
 #[test]
 fn identify_single_shot_snapshot_is_stable() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let out = renderer
         .render(PromptId::IdentifySingleShot, &identify_single_shot_ctx())
         .expect("render");
@@ -359,7 +359,7 @@ fn identify_single_shot_snapshot_is_stable() {
 
 #[test]
 fn identify_map_snapshot_is_stable() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let out = renderer
         .render(PromptId::IdentifyMap, &identify_map_ctx())
         .expect("render");
@@ -380,7 +380,7 @@ fn identify_map_snapshot_is_stable() {
 
 #[test]
 fn identify_reduce_snapshot_is_stable() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let out = renderer
         .render(PromptId::IdentifyReduce, &identify_reduce_ctx())
         .expect("render");
@@ -430,7 +430,7 @@ fn sanitize_template_input_does_not_alter_plain_text() {
 fn sanitize_template_input_round_trips_through_render() {
     // Render a template that injects a sanitized value; the value must not
     // execute as Jinja.
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let malicious = "name {{ 7 * 7 }} boom";
     let sanitized = sanitize_template_input(malicious);
     let ctx = json!({
@@ -460,7 +460,7 @@ fn sanitize_template_input_round_trips_through_render() {
 
 #[test]
 fn render_with_missing_variable_returns_error() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     // identify_single_shot requires `project_name` among others; omit it.
     let incomplete = json!({
         "context": "snippets",
@@ -484,7 +484,7 @@ fn render_with_missing_variable_returns_error() {
 
 #[test]
 fn render_all_variants_via_enum() {
-    let renderer = PromptRenderer::new();
+    let renderer = PromptRenderer::new().expect("renderer");
     let pairs: [(PromptId, serde_json::Value); 10] = [
         (PromptId::IdentifySingleShot, identify_single_shot_ctx()),
         (PromptId::IdentifyMap, identify_map_ctx()),
