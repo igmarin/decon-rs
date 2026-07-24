@@ -18,6 +18,7 @@ decon-llm = { path = "../decon-llm" }
 thiserror = "2.0"
 flate2 = "1"
 base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 # Pinned because prompt syntax is sensitive to minijinja/Jinja2 behavior and
