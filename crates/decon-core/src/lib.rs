@@ -13,6 +13,7 @@
 #![deny(missing_docs)]
 
 pub mod budget;
+pub mod checkpoint;
 pub mod config;
 pub mod diagrams;
 pub mod eval;
@@ -27,6 +28,11 @@ pub use budget::{
     DEFAULT_MAX_FILE_CHARS, DEFAULT_MAX_FULL_FILES_PER_MODULE, FileSize, PATH_STUB_PREFIX,
     TRUNCATION_MARKER, TruncateResult, capped_file_chars, estimate_budget, path_stub,
     path_stub_chars, truncate_content,
+};
+pub use checkpoint::{
+    CHECKPOINT_SCHEMA_VERSION, CheckpointError, CheckpointMeta, CheckpointV1,
+    DEFAULT_MANIFEST_REL_PATH, ENCODING_BASE64, FileBundleRecord, ManifestPointer, StageId,
+    config_hash, sha256_hex_prefixed,
 };
 pub use config::{
     ConfigError, DEFAULT_CONFIG_CHARS_PER_TOKEN, DEFAULT_MAX_LLM_CALLS, RunConfig,
