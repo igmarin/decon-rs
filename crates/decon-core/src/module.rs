@@ -112,7 +112,7 @@ pub fn module_key(path: &str) -> ModuleKey {
 }
 
 /// Priority group for inventory ordering: `0 = apps/*`, `1 = _root`, `2 = other`.
-fn module_sort_key(key: &str) -> (u8, &str) {
+pub(crate) fn module_sort_key(key: &str) -> (u8, &str) {
     if key.starts_with("apps/") {
         (0, key)
     } else if key == ROOT_MODULE {

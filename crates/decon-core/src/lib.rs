@@ -13,8 +13,12 @@
 #![deny(missing_docs)]
 
 pub mod module;
+pub mod scope;
 
 pub use module::{ModuleCount, ModuleKey, ROOT_MODULE, discover_modules, module_key};
+pub use scope::{
+    FilterStats, ScopeFilterResult, filter_files_by_scope, is_shared_module, unscoped_filter_stats,
+};
 
 /// The version of this crate, as declared in `Cargo.toml`.
 ///
