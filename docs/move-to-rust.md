@@ -342,7 +342,29 @@ Pocket Flow’s graph becomes an explicit `Pipeline` enum/state machine—**clea
 
 **Exit criteria:** dry-run stats match `baseline.json` exactly; eval works on existing `output/` samples; **≥ 85% coverage** on core/crawl; TDD used for budget/scope/mermaid; rustdoc on public API; CONTRIBUTING describes the test workflow.
 
-### Phase 2 — LLM identify only
+### Phase 2 — LLM identify only (Milestone M3)
+
+Tracked as GitHub milestone **M3 — LlmClient & Map-Reduce Identify**. Tickets:
+
+- #62 Abstraction + Relationship domain types (foundation)
+- #63 `LlmClient` trait + `MockClient` (tests-first, no network)
+- #64 Robust YAML/JSON block extraction from messy LLM output
+- #65 Prompt template rendering (minijinja) + snapshot tests
+- #66 OpenAI-compatible provider client (reqwest, retry/backoff/timeout, cache)
+- #67 Bounded concurrency for map batches (tokio semaphore)
+- #68 Ctrl+C graceful shutdown → clean checkpoint dump (exit 5)
+- #69 Identify single-shot stage (small repos)
+- #70 Identify map stage (batched, bounded-concurrent)
+- #71 Identify reduce stage (merge + rank → final list)
+- #72 Checkpoint-after-identify + resume mid-identify matrix
+- #73 Config-file secret-field guard (reject api_key/token in decon.toml)
+- #74 Opt-in live LLM smoke harness (budget-capped, feature-gated)
+
+Tech-debt tickets that should land with M3 (supply-chain + perf):
+
+- #75 Migrate off unsound `serde_yml`/`libyml` (RUSTSEC-2025-0067/0068)
+- #76 Add `cargo deny` (advisories + licenses + bans) to CI
+- #77 Fold file sizes into `crawl_local` (eliminate dry-run re-stat)
 
 - Provider clients + cache + budget  
 - Map-reduce identify + enrich  
@@ -603,6 +625,37 @@ fmt → clippy -D warnings → test → llvm-cov (≥85%) → doc →
 - [Best practices](./best-practices.md) — quality and monorepo principles (language-agnostic)  
 - [System design](./design.md) — original Pocket Flow design  
 - Root README — current Python CLI / Make UX to preserve in spirit  
+
+---
+
+## 14. Tech-debt register
+
+Findings from the M2 validation review (2026-07-24). Each item is a tracked
+GitHub issue so debt does not rot into "later means never".
+
+| Issue | Severity | Milestone | Summary |
+|-------|----------|-----------|---------|
+| #75 | High (supply chain) | M3 | `serde_yml` 0.0.12 + `libyml` 0.0.5 unsound/unmaintained (RUSTSEC-2025-0067/0068). Migrate before M3 adds YAML parsing. |
+| #76 | High (supply chain) | M3 | Add `cargo deny` (advisories + licenses + bans) to CI — §8.1 calls for it; only `cargo audit` exists today. |
+| #77 | Medium (perf) | M3 | `dry_run` re-stats every file; fold sizes into `crawl_local`. |
+| #73 | High (security) | M3 | Config-file secret-field guard — forward-looking; must land before API keys arrive (#66). |
+| #78 | Low (coverage) | M6 | `decon-cli/main.rs` at 64% line coverage; add assert_cmd error-path tests. |
+| #79 | Low (UX) | M6 | `load_file_config` extension detection + `cmd_resume` dir-exists check (rs-guard review Important #3/#4). |
+
+### M2 review verdict (rs-guard, review-result.txt)
+
+The M2 rs-guard review returned **NEGATIVE** with 2 "Security" findings.
+Investigation during validation:
+
+- **Security #1 (blank env var treated as set):** **False positive.**
+  `config_from_env_map` uses `nonblank()` which trims and filters empty
+  values; test `blank_env_does_not_override_defaults` covers it. The reviewer
+  did not see the implementation in the diff.
+- **Security #2 (config file accepting secrets):** **Not yet exploitable**
+  (`RunConfig` has no secret fields) but a valid forward-looking concern.
+  Tracked as #73 — a deny-list guard landing with M3.
+
+No code change was required for M2 itself; the forward-looking guard is #73.
 
 ---
 
