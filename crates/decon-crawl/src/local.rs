@@ -6,17 +6,19 @@
 //! - Skip **hidden directories** (name starts with `.`)
 //! - Include **hidden files** (e.g. `.env.example`)
 //! - Emit relative POSIX paths (`/` separators), sorted lexicographically
+//! - Paths must be valid UTF-8 (non-UTF-8 names fail the crawl)
 //!
 //! `.gitignore` support (via the `ignore` crate) is deferred; fixtures do not
 //! rely on it. GitHub fetch is out of scope for this module.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
 /// Inventory of files discovered under a repository root.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CrawlResult {
     /// Relative file paths using `/` separators, sorted ascending.
     pub files: Vec<String>,
@@ -45,9 +47,12 @@ pub enum CrawlError {
         #[source]
         source: std::io::Error,
     },
+    /// A path component is not valid UTF-8 (cannot form a POSIX inventory string).
+    #[error("path is not valid UTF-8: {0}")]
+    NonUtf8Path(PathBuf),
 }
 
-/// Recursively inventory files under `root`.
+/// Inventory files under `root` (iterative walk; no recursion stack risk).
 ///
 /// Returns sorted relative paths. Hidden directories are skipped; hidden
 /// files are included.
@@ -63,14 +68,15 @@ pub enum CrawlError {
 /// - A **directory** symlink `out_link` → outside dir is descended into; files
 ///   appear as `out_link/…` (still under `root` via the link path).
 ///
-/// `strip_prefix` only fails for pathological entries whose `PathBuf` is not
-/// under `root`; those are omitted. Infinite symlink loops are not specially
-/// detected — do not crawl pathological trees.
+/// Paths that cannot be expressed relative to `root` are omitted.
+/// Infinite symlink loops are not specially detected — do not crawl
+/// pathological trees.
 ///
 /// # Errors
 ///
 /// - [`CrawlError::NotADirectory`] if `root` exists but is not a directory
 /// - [`CrawlError::Io`] if `root` cannot be opened as a directory
+/// - [`CrawlError::NonUtf8Path`] if any inventoried path is not valid UTF-8
 ///
 /// Nested unreadable directories are skipped (best-effort walk) rather than
 /// failing the whole crawl, so partial trees still produce an inventory.
@@ -93,35 +99,66 @@ pub fn crawl_local(root: impl AsRef<Path>) -> Result<CrawlResult, CrawlError> {
         return Err(CrawlError::NotADirectory(root.to_path_buf()));
     }
 
-    let mut files: Vec<String> = Vec::new();
-    crawl_dir(root, root, &mut files);
+    let mut files = crawl_tree(root)?;
     files.sort();
     Ok(CrawlResult { files })
 }
 
-fn crawl_dir(root: &Path, dir: &Path, files: &mut Vec<String>) {
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
+/// Whether a directory/file **name** is hidden (leading `.`), without lossy UTF-8.
+fn is_hidden_name(name: &OsStr) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        name.as_bytes().first() == Some(&b'.')
+    }
+    #[cfg(not(unix))]
+    {
+        // Windows: OsStr is WTF-8; lossy is acceptable for the leading-dot check.
+        name.to_string_lossy().starts_with('.')
+    }
+}
+
+/// Convert `path` to a relative POSIX string under `root`, or `Ok(None)` if
+/// `path` is not under `root`.
+fn relative_posix(root: &Path, path: &Path) -> Result<Option<String>, CrawlError> {
+    let Ok(rel) = path.strip_prefix(root) else {
+        return Ok(None);
     };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
+    let Some(s) = rel.to_str() else {
+        return Err(CrawlError::NonUtf8Path(path.to_path_buf()));
+    };
+    Ok(Some(s.replace('\\', "/")))
+}
 
-        // Skip hidden directories; allow hidden files.
-        if path.is_dir() && name_str.starts_with('.') {
-            continue;
-        }
+fn crawl_tree(root: &Path) -> Result<Vec<String>, CrawlError> {
+    let mut files: Vec<String> = Vec::new();
+    let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
 
-        if path.is_file() {
-            if let Ok(rel) = path.strip_prefix(root) {
-                files.push(rel.to_string_lossy().replace('\\', "/"));
+    while let Some(dir) = stack.pop() {
+        let entries = match fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name();
+
+            // Skip hidden directories; allow hidden files.
+            if path.is_dir() && is_hidden_name(&name) {
+                continue;
             }
-        } else if path.is_dir() {
-            crawl_dir(root, &path, files);
+
+            if path.is_file() {
+                if let Some(rel) = relative_posix(root, &path)? {
+                    files.push(rel);
+                }
+            } else if path.is_dir() {
+                stack.push(path);
+            }
         }
     }
+
+    Ok(files)
 }
 
 #[cfg(test)]
@@ -175,6 +212,14 @@ mod tests {
     }
 
     #[test]
+    fn empty_root_returns_empty_inventory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let result = crawl_local(dir.path()).expect("empty crawl");
+        assert_eq!(result, CrawlResult::default());
+        assert_eq!(result.file_count(), 0);
+    }
+
+    #[test]
     fn hidden_directory_skipped_hidden_file_kept() {
         let dir = tempfile::tempdir().expect("tempdir");
         let root = dir.path();
@@ -223,6 +268,20 @@ mod tests {
     fn missing_path_errors() {
         let err = crawl_local("/nonexistent/decon-crawl-path-xyz").expect_err("missing");
         assert!(matches!(err, CrawlError::Io { .. }));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn relative_posix_rejects_non_utf8_path() {
+        // macOS APFS rejects non-UTF-8 names on create; exercise the conversion
+        // path in memory instead of relying on the filesystem.
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let root = Path::new("/tmp/decon-root");
+        let bad = PathBuf::from(OsStr::from_bytes(b"/tmp/decon-root/bad\xffname.txt"));
+        let err = relative_posix(root, &bad).expect_err("non-utf8");
+        assert!(matches!(err, CrawlError::NonUtf8Path(_)));
     }
 
     #[test]
