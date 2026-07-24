@@ -609,23 +609,19 @@ fn main() -> ExitCode {
         }
     }
 
-    // Canonical order matching the existing baseline.json (creation order
-    // from issue #7: Python lib, Elixir umbrella, JS/TS package). Any
-    // unknown fixtures are appended alphabetically.
+    // Crawl/setup parity fixtures only (issue #7). Other dirs under
+    // tests/fixtures/ (e.g. tutorials/ for structural eval) are intentionally
+    // excluded from baseline.json.
     let canonical = ["python-lib", "umbrella", "js-lib"];
     let mut fixture_names: Vec<String> = Vec::new();
     for name in &canonical {
         if found.iter().any(|f| f == name) {
             fixture_names.push(name.to_string());
+        } else {
+            eprintln!("Error: required fixture directory missing: {name}");
+            std::process::exit(2);
         }
     }
-    let mut extras: Vec<String> = found
-        .iter()
-        .filter(|f| !canonical.contains(&f.as_str()))
-        .cloned()
-        .collect();
-    extras.sort();
-    fixture_names.extend(extras);
 
     // Generate baselines for each fixture (preserving canonical order).
     let mut baselines: Vec<(String, FixtureBaseline)> = Vec::new();
