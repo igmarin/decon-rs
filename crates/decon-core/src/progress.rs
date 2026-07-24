@@ -1,7 +1,7 @@
 //! Progress tracking and max-LLM-call budget (fail closed).
 //!
 //! Pure counters for operability before live LLM stages. Exceeding
-//! [`ProgressTracker::max_llm_calls`] returns [`BudgetExceeded`].
+//! the configured maximum returns [`BudgetExceeded`].
 
 use thiserror::Error;
 
