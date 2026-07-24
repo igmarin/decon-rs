@@ -13,6 +13,7 @@
 #![deny(missing_docs)]
 
 pub mod budget;
+pub mod diagrams;
 pub mod mermaid;
 pub mod module;
 pub mod scope;
@@ -24,6 +25,10 @@ pub use budget::{
     DEFAULT_MAX_FILE_CHARS, DEFAULT_MAX_FULL_FILES_PER_MODULE, FileSize, PATH_STUB_PREFIX,
     TRUNCATION_MARKER, TruncateResult, capped_file_chars, estimate_budget, path_stub,
     path_stub_chars, truncate_content,
+};
+pub use diagrams::{
+    DiagramEdge, learning_path_flowchart, module_inventory_flowchart, module_inventory_from_counts,
+    system_map_flowchart,
 };
 pub use mermaid::{
     MAX_LABEL_CHARS, MAX_SEQUENCE_PARTICIPANTS, ValidateResult, participant_line, sanitize_label,
