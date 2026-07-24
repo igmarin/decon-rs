@@ -151,15 +151,19 @@ impl RunConfig {
 }
 
 /// Resolve full config by merging layers in order:
-/// defaults, then env, then file, then CLI.
+/// defaults, then `env_layer`, then `file_layer`, then `cli_layer`.
 ///
 /// **CLI** overrides file; **file** overrides env; **env** overrides defaults.
 #[must_use]
-pub fn resolve_config(file: &RunConfig, env: &RunConfig, cli: &RunConfig) -> RunConfig {
+pub fn resolve_config(
+    env_layer: &RunConfig,
+    file_layer: &RunConfig,
+    cli_layer: &RunConfig,
+) -> RunConfig {
     RunConfig::default()
-        .merge_layer(env)
-        .merge_layer(file)
-        .merge_layer(cli)
+        .merge_layer(env_layer)
+        .merge_layer(file_layer)
+        .merge_layer(cli_layer)
 }
 
 /// Parse a TOML document into a config layer (`decon.toml` body).
@@ -328,7 +332,7 @@ mod tests {
             ..RunConfig::empty()
         };
 
-        let resolved = resolve_config(&file, &env, &cli);
+        let resolved = resolve_config(&env, &file, &cli);
         assert_eq!(resolved.language.as_deref(), Some("de")); // CLI
         assert_eq!(resolved.provider.as_deref(), Some("openai")); // file
         assert_eq!(resolved.max_llm_calls, Some(10)); // env
@@ -342,7 +346,7 @@ mod tests {
         vars.insert("DECON_MAX_LLM_CALLS".into(), "".into());
         vars.insert("DECON_ROOT".into(), "/tmp/repo".into());
         let env = config_from_env_map(&vars).expect("env map");
-        let resolved = resolve_config(&RunConfig::empty(), &env, &RunConfig::empty());
+        let resolved = resolve_config(&env, &RunConfig::empty(), &RunConfig::empty());
         assert_eq!(resolved.language.as_deref(), Some("en")); // default, blank ignored
         assert_eq!(resolved.max_llm_calls, Some(DEFAULT_MAX_LLM_CALLS));
         assert_eq!(
