@@ -12,6 +12,7 @@
 
 #![deny(missing_docs)]
 
+pub mod abstraction;
 pub mod budget;
 pub mod checkpoint;
 pub mod config;
@@ -25,6 +26,9 @@ pub mod secrets;
 pub mod setup;
 
 // Re-exports inherit rustdoc from `budget` (no extra crate-root docs required).
+pub use abstraction::{
+    Abstraction, AbstractionKind, IdentifyResult, Relationship, Tier, TierParseError,
+};
 pub use budget::{
     BudgetConfig, BudgetEstimate, DEFAULT_BATCH_CHAR_BUDGET, DEFAULT_CHARS_PER_TOKEN,
     DEFAULT_MAX_FILE_CHARS, DEFAULT_MAX_FULL_FILES_PER_MODULE, FileSize, PATH_STUB_PREFIX,
