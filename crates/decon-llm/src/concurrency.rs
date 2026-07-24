@@ -54,11 +54,13 @@ pub async fn bounded_complete(
     let futures = prompts.into_iter().map(|prompt| {
         let sem = Arc::clone(&semaphore);
         async move {
-            // The semaphore is never closed, so acquisition cannot fail.
+            // The semaphore is never closed, so acquisition cannot fail in
+            // practice. We still handle the error gracefully rather than
+            // panicking, since this is library code.
             let _permit = sem
                 .acquire_owned()
                 .await
-                .expect("semaphore should not be closed");
+                .map_err(|_| LlmError::network("concurrency semaphore closed unexpectedly"))?;
             client.complete(&prompt).await
         }
     });
