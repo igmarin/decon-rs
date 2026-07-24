@@ -15,8 +15,10 @@ workspace = true
 decon-core = { path = "../decon-core" }
 decon-crawl = { path = "../decon-crawl" }
 decon-llm = { path = "../decon-llm" }
+thiserror = "2.0"
 
 [dev-dependencies]
 # Pinned because prompt syntax is sensitive to minijinja/Jinja2 behavior and
 # golden/snapshot tests depend on exact render output.
 minijinja = "=2.20.0"
+serde_json = "1.0"
