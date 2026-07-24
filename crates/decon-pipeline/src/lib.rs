@@ -21,8 +21,8 @@ pub mod resume;
 pub use checkpoint_store::{CheckpointStore, CheckpointStoreError, records_from_files};
 pub use dry_run::{DryRunError, DryRunPlan, dry_run, dry_run_with_budget};
 pub use identify::{
-    CandidateAbstraction, CandidateBatch, IdentifyError, IdentifyMapInput, IdentifySingleShotInput,
-    identify_map, identify_single_shot,
+    CandidateAbstraction, CandidateBatch, IdentifyError, IdentifyMapInput, IdentifyReduceInput,
+    IdentifySingleShotInput, identify_map, identify_reduce, identify_single_shot,
 };
 pub use prompts::{PromptError, PromptId, PromptRenderer, sanitize_template_input};
 pub use resume::{
