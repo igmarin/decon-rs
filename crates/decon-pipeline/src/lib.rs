@@ -5,10 +5,15 @@
 //! framework for this linear workflow (fetch → identify → relationships →
 //! order → chapters → setup → overview → combine). Checkpoint format follows
 //! ADR 0001 (content-addressed manifest, not a monolithic JSON blob).
-//! Implementation lands across Milestones 1-4 — see `docs/move-to-rust.md`
-//! §2.2 and §5.
+//!
+//! Milestone 1 delivers [`dry_run::dry_run`]; later milestones add LLM stages —
+//! see `docs/move-to-rust.md` §2.2 and §5.
 
 #![deny(missing_docs)]
+
+pub mod dry_run;
+
+pub use dry_run::{DryRunError, DryRunPlan, dry_run, dry_run_with_budget};
 
 /// The version of this crate, as declared in `Cargo.toml`.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

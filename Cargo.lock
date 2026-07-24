@@ -192,6 +192,8 @@ dependencies = [
  "decon-crawl",
  "decon-llm",
  "minijinja",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
