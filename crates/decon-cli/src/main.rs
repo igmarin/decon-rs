@@ -8,9 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use decon_core::{
-    DEFAULT_EVAL_PASS_THRESHOLD, ModuleKey, TutorialFile, evaluate_tutorial,
-};
+use decon_core::{DEFAULT_EVAL_PASS_THRESHOLD, ModuleKey, TutorialFile, evaluate_tutorial};
 use decon_crawl::crawl_local;
 use decon_pipeline::{DryRunError, dry_run};
 
@@ -141,12 +139,7 @@ fn cmd_dry_run(dir: &Path, apps: &[String], format: OutputFormat) -> ExitCode {
                     let modules: serde_json::Map<String, serde_json::Value> = plan
                         .modules
                         .iter()
-                        .map(|m| {
-                            (
-                                m.key.as_str().to_owned(),
-                                serde_json::json!(m.count),
-                            )
-                        })
+                        .map(|m| (m.key.as_str().to_owned(), serde_json::json!(m.count)))
                         .collect();
                     let v = serde_json::json!({
                         "root": plan.root.to_string_lossy(),
@@ -255,17 +248,14 @@ fn walk_md(dir: &Path, root: &Path, out: &mut Vec<TutorialFile>) -> Result<(), S
         if path.is_dir() {
             walk_md(&path, root, out)?;
         } else if path.extension().and_then(|e| e.to_str()) == Some("md") {
-            let content = fs::read_to_string(&path)
-                .map_err(|e| format!("read {}: {e}", path.display()))?;
+            let content =
+                fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
             let rel = path
                 .strip_prefix(root)
                 .map_err(|_| format!("strip prefix for {}", path.display()))?
                 .to_string_lossy()
                 .replace('\\', "/");
-            out.push(TutorialFile {
-                path: rel,
-                content,
-            });
+            out.push(TutorialFile { path: rel, content });
         }
     }
     Ok(())
