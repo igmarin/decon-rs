@@ -264,9 +264,13 @@ fn assess_setup(root: &Path, files: &[String]) -> SetupAssessment {
         || readme_lower.contains("bundle")
         || readme_lower.contains("docker compose");
 
-    // Environment variable documentation.
-    let has_env_docs = files.iter().any(|f| f == ".env.example")
-        || readme_lower.contains(".env")
+    // Environment variable documentation (basename match for nested paths).
+    let has_env_docs = files.iter().any(|f| {
+        Path::new(f)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n == ".env.example")
+    }) || readme_lower.contains(".env")
         || readme_lower.contains("environment");
 
     // How to run locally.
