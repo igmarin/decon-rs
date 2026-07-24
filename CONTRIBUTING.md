@@ -89,6 +89,13 @@ commit. PRs also receive an automated rs-guard review from GitHub Actions.
 | Mermaid sanitize | `decon-core::mermaid` | Pure; table-driven tests |
 | Index diagrams | `decon-core::diagrams` | Always sanitize/validate |
 | Structural eval | `decon-core::eval` | Fixtures under `tests/fixtures/tutorials/` |
+| RunConfig | `decon-core::config` | CLI > file > env > defaults |
+| Checkpoint types | `decon-core::checkpoint` | ADR 0001 metadata |
+| Progress / LLM budget | `decon-core::progress` | Fail-closed max calls |
+| Secrets redaction | `decon-core::secrets` | Paths + content heuristics |
+| LLM disk cache | `decon-llm::cache` | No live network |
+| Checkpoint store | `decon-pipeline::checkpoint_store` | save/load bundle |
+| Resume helpers | `decon-pipeline::resume` | stage-skip / invalidate |
 | Local crawl | `decon-crawl::local` | FS I/O |
 | Dry-run plan | `decon-pipeline::dry_run` | Orchestration |
 | CLI | `decon-cli` | Thin wrappers + `assert_cmd` tests |

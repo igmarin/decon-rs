@@ -17,15 +17,15 @@ for the full migration design.
 
 ## Current status
 
-**Milestone 1 (Crawl + Dry-run + Eval) — complete.**
-Zero LLM spend. M2 (checkpoint/config + coverage hard gate) is next.
+**Milestone 2 (Checkpoint, Config & Coverage) — complete.**
+Still no live LLM spend. M3 (provider clients + map-reduce identify) is next.
 
 | Milestone | Goal | Status |
 |-----------|------|--------|
 | **M0** — Spec Freeze | Workspace layout, CI, CONTRIBUTING, ADR 0001, prompt catalog, test fixtures, parity baseline | ✅ Done |
 | **M1** — Crawl + Dry-run + Eval | `decon crawl` / dry-run matching `baseline.json`; mermaid sanitize; setup-assessment parity; `decon eval` port | ✅ Done |
-| **M2** — Checkpoint, Config & Coverage | Content-addressed checkpoint (ADR 0001); `decon.toml`; ≥85% coverage gate | 🔜 Next |
-| **M3** — LLM Identify | `LlmClient` trait + provider clients; map/reduce identify; checkpoint resume | Planned |
+| **M2** — Checkpoint, Config & Coverage | Content-addressed checkpoint (ADR 0001); `decon.toml`; ≥85% coverage gate | ✅ Done |
+| **M3** — LLM Identify | `LlmClient` trait + provider clients; map/reduce identify; checkpoint resume | 🔜 Next |
 | **M4** — Full Generate | Relationships → order → chapters → setup → overview → combine; Spanish chrome; `--each-app` | Planned |
 | **M5** — Product Polish | Installers, man page, shell completions, concurrency, error UX | Planned |
 
@@ -33,14 +33,22 @@ Zero LLM spend. M2 (checkpoint/config + coverage hard gate) is next.
 
 - **Cargo workspace** with five crates: `decon-core`, `decon-crawl`,
   `decon-llm`, `decon-pipeline`, `decon-cli`.
-- **CLI (M1):**
+- **CLI (M1 + M2):**
   - `decon crawl --dir PATH [--format text|json]` — local file inventory
   - `decon dry-run --dir PATH [--apps …] [--format text|json]` — crawl + scope +
     setup assessment + budget (zero LLM)
   - `decon eval --out PATH` — structural tutorial quality gate (zero LLM)
+  - `decon init` — write starter `decon.toml`
+  - `decon resume --checkpoint PATH` — report next/pending stages from a checkpoint
 - **`decon-core` pure helpers:** module keys, monorepo scope, setup scoring,
   context budget, Mermaid sanitize/validate, index diagram builders, structural
-  eval.
+  eval, `RunConfig` layering, checkpoint schema v1 types, progress budget,
+  secrets redaction.
+- **Checkpoint store + resume** (`decon-pipeline`): `checkpoint.json` +
+  `files.ndjson.gz`, stage-skip / partial regenerate helpers.
+- **LLM disk cache structure** (`decon-llm`): key = hash(prompt)+model+provider
+  (no live network yet).
+- **CI coverage hard gate:** ≥85% workspace line coverage.
 - **Parity fixtures:** `tests/fixtures/{python-lib,umbrella,js-lib}` + frozen
   `baseline.json`; tutorial goldens under `tests/fixtures/tutorials/`.
 - **CI pipeline:** fmt, clippy (`-D warnings`), test, coverage report, doc,
@@ -60,12 +68,16 @@ cargo run -p decon-cli -- dry-run --dir tests/fixtures/umbrella --apps apps/alph
 
 # Structural eval of a tutorial tree
 cargo run -p decon-cli -- eval --out tests/fixtures/tutorials/good-mini
+
+# Config + checkpoint status
+cargo run -p decon-cli -- init --dir /tmp/decon-demo
+# cargo run -p decon-cli -- resume --checkpoint PATH --format json
 ```
 
 ### What does not work yet
 
-LLM providers, checkpoint resume, full `generate` pipeline, chapter writing,
-and combine/index chrome. Those land in M2–M4.
+Live LLM provider clients, map-reduce identify, full `generate` pipeline,
+chapter writing, and combine/index chrome. Those land in M3–M4.
 
 ---
 
