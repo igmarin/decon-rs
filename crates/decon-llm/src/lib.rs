@@ -15,12 +15,14 @@
 
 pub mod cache;
 pub mod client;
+pub mod concurrency;
 pub mod error;
 pub mod mock;
 pub mod openai_client;
 
 pub use cache::{CacheError, CacheKeyInput, DiskCache, cache_key};
 pub use client::LlmClient;
+pub use concurrency::{bounded_complete, bounded_complete_with_budget};
 pub use error::LlmError;
 pub use mock::MockClient;
 pub use openai_client::{OpenAiClientConfig, OpenAiCompatibleClient};
