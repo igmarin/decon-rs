@@ -113,7 +113,9 @@ where
         || readme_lower.contains("bundle")
         || readme_lower.contains("docker compose");
 
-    let has_env_docs = files.iter().any(|f| f == ".env.example")
+    // Match by basename so nested paths like `docs/.env.example` count
+    // (consistent with config_files discovery).
+    let has_env_docs = files.iter().any(|f| file_name(f) == ".env.example")
         || readme_lower.contains(".env")
         || readme_lower.contains("environment");
 
@@ -188,8 +190,12 @@ where
     }
 }
 
+/// Final path component, accepting `/` or `\` separators.
+///
+/// Crawl normalizes to `/`; accepting `\` keeps helpers robust if a caller
+/// passes OS-native paths.
 fn file_name(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or(path)
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
 fn gap_readme_missing_or_short() -> &'static str {
@@ -216,17 +222,14 @@ fn gap_no_prereq() -> &'static str {
 mod tests {
     use super::*;
 
-    fn fixture_readme(name: &str) -> String {
-        let path = format!(
-            "{}/../../tests/fixtures/{name}/README.md",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path}: {e}"))
-    }
+    // Compile-time inclusion of shared workspace fixtures (no runtime I/O).
+    // Paths are relative to this source file (`crates/decon-core/src/setup.rs`).
+    const PYTHON_LIB_README: &str = include_str!("../../../tests/fixtures/python-lib/README.md");
+    const UMBRELLA_README: &str = include_str!("../../../tests/fixtures/umbrella/README.md");
+    const JS_LIB_README: &str = include_str!("../../../tests/fixtures/js-lib/README.md");
 
     #[test]
     fn assess_setup_python_lib_matches_baseline() {
-        let readme = fixture_readme("python-lib");
         let files = [
             ".env.example",
             "README.md",
@@ -235,7 +238,7 @@ mod tests {
             "src/mylib/cli.py",
             "src/mylib/core.py",
         ];
-        let a = assess_setup(&readme, files.iter().copied());
+        let a = assess_setup(PYTHON_LIB_README, files.iter().copied());
         assert!(!a.needs_setup_guide);
         assert_eq!(a.score, 100);
         assert!(a.signals.has_readme);
@@ -243,6 +246,7 @@ mod tests {
         assert!(a.signals.has_env_docs);
         assert!(a.signals.has_run_instructions);
         assert!(a.signals.has_prerequisites);
+        // Exact length is the baseline contract; if fixtures change, update baseline.json.
         assert_eq!(a.signals.readme_length, 504);
         assert!(a.gaps.is_empty());
         assert_eq!(
@@ -253,7 +257,6 @@ mod tests {
 
     #[test]
     fn assess_setup_umbrella_matches_baseline() {
-        let readme = fixture_readme("umbrella");
         let files = [
             ".env.example",
             "README.md",
@@ -266,7 +269,7 @@ mod tests {
             "config/config.exs",
             "mix.exs",
         ];
-        let a = assess_setup(&readme, files.iter().copied());
+        let a = assess_setup(UMBRELLA_README, files.iter().copied());
         assert!(!a.needs_setup_guide);
         assert_eq!(a.score, 100);
         assert_eq!(a.signals.readme_length, 543);
@@ -285,7 +288,6 @@ mod tests {
 
     #[test]
     fn assess_setup_js_lib_matches_baseline() {
-        let readme = fixture_readme("js-lib");
         let files = [
             ".env.example",
             "README.md",
@@ -294,7 +296,7 @@ mod tests {
             "src/utils.ts",
             "tsconfig.json",
         ];
-        let a = assess_setup(&readme, files.iter().copied());
+        let a = assess_setup(JS_LIB_README, files.iter().copied());
         assert!(!a.needs_setup_guide);
         assert_eq!(a.score, 100);
         assert_eq!(a.signals.readme_length, 383);
@@ -303,6 +305,18 @@ mod tests {
             a.config_files,
             vec![".env.example".to_owned(), "package.json".to_owned()]
         );
+    }
+
+    #[test]
+    fn env_docs_from_nested_env_example_basename() {
+        // Important: nested `.env.example` must count like config_files do.
+        let readme = "x".repeat(MIN_README_LEN)
+            + "\n## Prerequisites\nRequires Go.\n## Install\ngo install\n## Run\ngo run .\n";
+        // No env keywords in README; only nested file.
+        let a = assess_setup(&readme, ["docs/.env.example", "main.go"].iter().copied());
+        assert!(a.signals.has_env_docs);
+        assert_eq!(a.score, 100);
+        assert!(a.config_files.iter().any(|f| f == "docs/.env.example"));
     }
 
     #[test]
@@ -375,5 +389,6 @@ mod tests {
         assert_eq!(file_name("apps/alpha/mix.exs"), "mix.exs");
         assert_eq!(file_name("README.md"), "README.md");
         assert_eq!(file_name(".env.example"), ".env.example");
+        assert_eq!(file_name(r"apps\alpha\mix.exs"), "mix.exs");
     }
 }
