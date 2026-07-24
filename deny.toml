@@ -10,13 +10,9 @@ all-features = true
 [advisories]
 db-urls = ["https://github.com/rustsec/advisory-db"]
 unmaintained = "workspace"
-# TODO(#75): serde_yml and its transitive dependency libyml each have an
-# unsoundness advisory. They are being removed in #75 (migrate off
-# serde_yml). Once #75 lands, remove both entries from this ignore list.
-ignore = [
-    { id = "RUSTSEC-2025-0067", reason = "libyml unsound; being fixed in #75 (migrate off serde_yml)" },
-    { id = "RUSTSEC-2025-0068", reason = "serde_yml unsound; being fixed in #75 (migrate off serde_yml)" },
-]
+# serde_yml/libyml (RUSTSEC-2025-0067/0068) were removed in #75; no
+# advisories are currently ignored.
+ignore = []
 
 [licenses]
 confidence-threshold = 0.8
