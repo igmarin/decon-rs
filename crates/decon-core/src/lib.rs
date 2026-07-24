@@ -19,6 +19,7 @@ pub mod diagrams;
 pub mod eval;
 pub mod mermaid;
 pub mod module;
+pub mod progress;
 pub mod scope;
 pub mod setup;
 
@@ -54,6 +55,7 @@ pub use mermaid::{
     validate_mermaid,
 };
 pub use module::{ModuleCount, ModuleKey, ROOT_MODULE, discover_modules, module_key};
+pub use progress::{BudgetExceeded, ProgressSnapshot, ProgressTracker};
 pub use scope::{
     FilterStats, ScopeFilterResult, filter_files_by_scope, is_shared_module, unscoped_filter_stats,
 };
