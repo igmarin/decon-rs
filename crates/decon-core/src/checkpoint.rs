@@ -408,10 +408,7 @@ mod tests {
         let mut cp = CheckpointV1::new(&cfg, cfg.clone(), "r", "t0").unwrap();
         cp.mark_stage_complete(StageId::Identify, "t2");
         cp.mark_stage_complete(StageId::Fetch, "t1");
-        assert_eq!(
-            cp.completed_stages,
-            vec![StageId::Fetch, StageId::Identify]
-        );
+        assert_eq!(cp.completed_stages, vec![StageId::Fetch, StageId::Identify]);
     }
 
     #[test]
