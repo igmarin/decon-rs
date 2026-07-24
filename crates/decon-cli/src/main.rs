@@ -203,6 +203,7 @@ fn cmd_init(dir: &Path) -> ExitCode {
 # language = "en"
 # max_llm_calls = 200
 # apps = []
+# API keys are read from DECON_LLM_API_KEY env var only — never put them here.
 "#;
     match fs::write(&path, sample) {
         Ok(()) => {

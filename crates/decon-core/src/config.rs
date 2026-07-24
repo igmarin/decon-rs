@@ -34,6 +34,16 @@ pub enum ConfigError {
         /// Raw value that failed to parse.
         value: String,
     },
+    /// A secret-bearing field was found in a config file (secrets must come from env only).
+    #[error(
+        "secret field {field:?} is not allowed in config files; use the {env_var} environment variable instead"
+    )]
+    SecretFieldRejected {
+        /// The rejected field name.
+        field: String,
+        /// Suggested environment variable for this secret.
+        env_var: String,
+    },
 }
 
 /// Default max LLM calls before the budget tracker fails closed.
@@ -168,20 +178,35 @@ pub fn resolve_config(
 
 /// Parse a TOML document into a config layer (`decon.toml` body).
 ///
+/// The raw parsed value is scanned for secret-bearing field names *before*
+/// deserializing into [`RunConfig`], so unknown secret-like keys are also
+/// rejected (defense-in-depth — see issue #73 and move-to-rust §4.3/§8.1).
+///
 /// # Errors
 ///
-/// Returns a message when TOML is invalid or types do not match.
+/// Returns [`ConfigError::Toml`] when TOML is invalid or types do not match,
+/// or [`ConfigError::SecretFieldRejected`] when a secret-bearing key is found.
 pub fn parse_toml_config(text: &str) -> Result<RunConfig, ConfigError> {
-    toml::from_str(text).map_err(|e| ConfigError::Toml(e.to_string()))
+    let value: toml::Value = toml::from_str(text).map_err(|e| ConfigError::Toml(e.to_string()))?;
+    let json_value = serde_json::to_value(&value).map_err(|e| ConfigError::Toml(e.to_string()))?;
+    check_for_secret_fields(&json_value)?;
+    serde_json::from_value(json_value).map_err(|e| ConfigError::Toml(e.to_string()))
 }
 
 /// Parse a YAML document into a config layer (`.decon.yaml` body).
 ///
+/// The raw parsed value is scanned for secret-bearing field names *before*
+/// deserializing into [`RunConfig`] (defense-in-depth — see issue #73).
+///
 /// # Errors
 ///
-/// Returns a message when YAML is invalid or types do not match.
+/// Returns [`ConfigError::Yaml`] when YAML is invalid or types do not match,
+/// or [`ConfigError::SecretFieldRejected`] when a secret-bearing key is found.
 pub fn parse_yaml_config(text: &str) -> Result<RunConfig, ConfigError> {
-    serde_yml::from_str(text).map_err(|e| ConfigError::Yaml(e.to_string()))
+    let value: serde_json::Value =
+        serde_yml::from_str(text).map_err(|e| ConfigError::Yaml(e.to_string()))?;
+    check_for_secret_fields(&value)?;
+    serde_json::from_value(value).map_err(|e| ConfigError::Yaml(e.to_string()))
 }
 
 /// Load a config layer from environment-style key/value pairs.
@@ -299,6 +324,101 @@ fn nonblank(v: Option<&String>) -> Option<&str> {
     v.map(String::as_str)
         .map(str::trim)
         .filter(|s| !s.is_empty())
+}
+
+/// Exact-match secret field names (compared case-insensitively against keys).
+const SECRET_EXACT_MATCHES: &[&str] = &[
+    "api_key",
+    "apikey",
+    "token",
+    "secret",
+    "password",
+    "credential",
+    "credentials",
+    "private_key",
+    "authorization",
+];
+
+/// Suffix patterns that mark a key as secret-bearing (case-insensitive).
+const SECRET_SUFFIXES: &[&str] = &["_key", "_token", "_secret", "_password", "_credential"];
+
+/// Substrings that mark a key as secret-bearing (case-insensitive).
+const SECRET_CONTAINS: &[&str] = &["secret", "password", "credential"];
+
+/// Returns true when `key` (case-insensitively) looks like a secret field.
+fn is_secret_field(key: &str) -> bool {
+    let lower = key.to_ascii_lowercase();
+    if SECRET_EXACT_MATCHES.iter().any(|&m| lower == m) {
+        return true;
+    }
+    if SECRET_SUFFIXES.iter().any(|&s| lower.ends_with(s)) {
+        return true;
+    }
+    if SECRET_CONTAINS.iter().any(|&s| lower.contains(s)) {
+        return true;
+    }
+    false
+}
+
+/// Suggest the environment variable a rejected secret field should move to.
+///
+/// Well-known fields map to specific `DECON_LLM_*` vars; everything else falls
+/// back to a generic `DECON_*` suggestion derived from the field name.
+fn env_var_for_field(field: &str) -> String {
+    let lower = field.to_ascii_lowercase();
+    match lower.as_str() {
+        "api_key" | "apikey" => "DECON_LLM_API_KEY".to_owned(),
+        "token" => "DECON_LLM_TOKEN".to_owned(),
+        "secret" => "DECON_LLM_SECRET".to_owned(),
+        "password" => "DECON_LLM_PASSWORD".to_owned(),
+        "credential" | "credentials" => "DECON_LLM_CREDENTIAL".to_owned(),
+        "private_key" => "DECON_LLM_PRIVATE_KEY".to_owned(),
+        "authorization" => "DECON_LLM_AUTHORIZATION".to_owned(),
+        _ => {
+            // Strip known secret suffixes/prefixes and build DECON_<STEM>.
+            let stem = lower
+                .trim_end_matches("_key")
+                .trim_end_matches("_token")
+                .trim_end_matches("_secret")
+                .trim_end_matches("_password")
+                .trim_end_matches("_credential");
+            format!("DECON_{}", stem.to_ascii_uppercase())
+        }
+    }
+}
+
+/// Check a parsed config value for secret-bearing field names.
+///
+/// Recursively walks objects (and arrays of objects) so nested tables like
+/// `[llm] api_key = …` are also caught. Returns the first rejected field, if
+/// any. This runs *before* deserializing into [`RunConfig`] so unknown
+/// secret-like keys — not just known struct fields — are rejected.
+///
+/// # Errors
+///
+/// Returns [`ConfigError::SecretFieldRejected`] for the first secret-like key.
+fn check_for_secret_fields(value: &serde_json::Value) -> Result<(), ConfigError> {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, val) in map {
+                if is_secret_field(key) {
+                    return Err(ConfigError::SecretFieldRejected {
+                        field: key.clone(),
+                        env_var: env_var_for_field(key),
+                    });
+                }
+                check_for_secret_fields(val)?;
+            }
+            Ok(())
+        }
+        serde_json::Value::Array(arr) => {
+            for item in arr {
+                check_for_secret_fields(item)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 #[cfg(test)]
@@ -450,5 +570,153 @@ provider: anthropic
             matches!(err, ConfigError::Yaml(_)),
             "expected Yaml error, got {err}"
         );
+    }
+
+    // --- Secret-field guard (issue #73) ---
+
+    fn assert_secret_rejected(err: ConfigError, expected_field: &str) {
+        match err {
+            ConfigError::SecretFieldRejected { field, env_var } => {
+                assert_eq!(field, expected_field, "field name mismatch");
+                assert!(
+                    !env_var.is_empty(),
+                    "env var suggestion should be non-empty"
+                );
+                assert!(
+                    env_var.starts_with("DECON_"),
+                    "env var should start with DECON_, got {env_var}"
+                );
+            }
+            other => panic!("expected SecretFieldRejected, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn toml_api_key_rejected() {
+        let err = parse_toml_config(r#"api_key = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "api_key");
+    }
+
+    #[test]
+    fn toml_token_rejected() {
+        let err = parse_toml_config(r#"token = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "token");
+    }
+
+    #[test]
+    fn toml_suffix_key_rejected() {
+        let err = parse_toml_config(r#"llm_api_key = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "llm_api_key");
+    }
+
+    #[test]
+    fn toml_suffix_token_rejected() {
+        let err = parse_toml_config(r#"github_token = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "github_token");
+    }
+
+    #[test]
+    fn toml_contains_secret_rejected() {
+        let err = parse_toml_config(r#"my_secret_field = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "my_secret_field");
+    }
+
+    #[test]
+    fn toml_password_rejected() {
+        let err = parse_toml_config(r#"password = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "password");
+    }
+
+    #[test]
+    fn toml_benign_config_accepted() {
+        let cfg = parse_toml_config(
+            r#"
+language = "es"
+max_llm_calls = 42
+apps = ["apps/alpha", "apps/beta"]
+"#,
+        )
+        .expect("benign toml should be accepted");
+        assert_eq!(cfg.language.as_deref(), Some("es"));
+        assert_eq!(cfg.max_llm_calls, Some(42));
+    }
+
+    #[test]
+    fn yaml_api_key_rejected() {
+        let err = parse_yaml_config("api_key: xxx\n").unwrap_err();
+        assert_secret_rejected(err, "api_key");
+    }
+
+    #[test]
+    fn yaml_token_rejected() {
+        let err = parse_yaml_config("token: xxx\n").unwrap_err();
+        assert_secret_rejected(err, "token");
+    }
+
+    #[test]
+    fn yaml_benign_config_accepted() {
+        let cfg = parse_yaml_config("language: fr\nprovider: anthropic\n")
+            .expect("benign yaml should be accepted");
+        assert_eq!(cfg.language.as_deref(), Some("fr"));
+        assert_eq!(cfg.provider.as_deref(), Some("anthropic"));
+    }
+
+    #[test]
+    fn yaml_nested_secret_rejected() {
+        let err = parse_yaml_config("llm:\n  api_key: xxx\n").unwrap_err();
+        assert_secret_rejected(err, "api_key");
+    }
+
+    #[test]
+    fn toml_case_insensitive_api_key_rejected() {
+        let err = parse_toml_config(r#"API_KEY = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "API_KEY");
+    }
+
+    #[test]
+    fn toml_case_insensitive_mixed_case_rejected() {
+        let err = parse_toml_config(r#"Api_Key = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "Api_Key");
+    }
+
+    #[test]
+    fn error_message_includes_field_and_env_var() {
+        let err = parse_toml_config(r#"api_key = "xxx""#).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("api_key"), "msg should mention field: {msg}");
+        assert!(
+            msg.contains("DECON_LLM_API_KEY"),
+            "msg should suggest env var: {msg}"
+        );
+    }
+
+    #[test]
+    fn toml_nested_secret_rejected() {
+        let err = parse_toml_config(
+            r#"
+[llm]
+api_key = "xxx"
+"#,
+        )
+        .unwrap_err();
+        assert_secret_rejected(err, "api_key");
+    }
+
+    #[test]
+    fn toml_credential_rejected() {
+        let err = parse_toml_config(r#"credentials = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "credentials");
+    }
+
+    #[test]
+    fn toml_private_key_rejected() {
+        let err = parse_toml_config(r#"private_key = "xxx""#).unwrap_err();
+        assert_secret_rejected(err, "private_key");
+    }
+
+    #[test]
+    fn toml_authorization_rejected() {
+        let err = parse_toml_config(r#"authorization = "Bearer xxx""#).unwrap_err();
+        assert_secret_rejected(err, "authorization");
     }
 }
