@@ -21,6 +21,7 @@ pub mod mermaid;
 pub mod module;
 pub mod progress;
 pub mod scope;
+pub mod secrets;
 pub mod setup;
 
 // Re-exports inherit rustdoc from `budget` (no extra crate-root docs required).
@@ -58,6 +59,10 @@ pub use module::{ModuleCount, ModuleKey, ROOT_MODULE, discover_modules, module_k
 pub use progress::{BudgetExceeded, ProgressSnapshot, ProgressTracker};
 pub use scope::{
     FilterStats, ScopeFilterResult, filter_files_by_scope, is_shared_module, unscoped_filter_stats,
+};
+pub use secrets::{
+    REDACTED_PLACEHOLDER, content_for_checkpoint, is_sensitive_path, path_is_sensitive,
+    redact_content,
 };
 pub use setup::{
     CONFIG_FILE_NAMES, MIN_README_LEN, SHORT_README_PENALTY, SIGNAL_POINTS, SetupAssessment,
