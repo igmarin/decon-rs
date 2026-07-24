@@ -51,68 +51,27 @@ pub struct ValidateResult {
 #[must_use]
 pub fn sanitize_label(label: &str) -> String {
     let mut out = String::with_capacity(label.len().min(MAX_LABEL_CHARS + 8));
-    let mut depth_square: i32 = 0;
-    let mut depth_paren: i32 = 0;
     let mut last_was_space = true; // trim leading
 
     for ch in label.chars() {
         if FORBIDDEN_IN_LABEL.contains(&ch) {
             continue;
         }
-        match ch {
-            '[' => {
-                depth_square += 1;
-                if !last_was_space {
-                    out.push(' ');
-                    last_was_space = true;
-                }
-                continue;
+        // Brackets/parens become spaces (not shape syntax in labels).
+        if matches!(ch, '[' | ']' | '(' | ')') || ch.is_ascii_whitespace() {
+            if !last_was_space {
+                out.push(' ');
+                last_was_space = true;
             }
-            ']' => {
-                if depth_square > 0 {
-                    depth_square -= 1;
-                }
-                if !last_was_space {
-                    out.push(' ');
-                    last_was_space = true;
-                }
-                continue;
-            }
-            '(' => {
-                depth_paren += 1;
-                if !last_was_space {
-                    out.push(' ');
-                    last_was_space = true;
-                }
-                continue;
-            }
-            ')' => {
-                if depth_paren > 0 {
-                    depth_paren -= 1;
-                }
-                if !last_was_space {
-                    out.push(' ');
-                    last_was_space = true;
-                }
-                continue;
-            }
-            c if c.is_ascii_whitespace() => {
-                if !last_was_space {
-                    out.push(' ');
-                    last_was_space = true;
-                }
-                continue;
-            }
-            c if is_safe_label_char(c) => {
-                out.push(c);
-                last_was_space = false;
-            }
-            _ => {
-                if !last_was_space {
-                    out.push(' ');
-                    last_was_space = true;
-                }
-            }
+            continue;
+        }
+        if is_safe_label_char(ch) {
+            out.push(ch);
+            last_was_space = false;
+        } else if !last_was_space {
+            // Drop non-ASCII / unsafe punctuation as a single space boundary.
+            out.push(' ');
+            last_was_space = true;
         }
     }
 
