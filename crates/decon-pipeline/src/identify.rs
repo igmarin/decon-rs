@@ -559,7 +559,13 @@ pub async fn identify_reduce(
     //    max_abstraction_num, name_lang_hint, desc_lang_hint, candidates_blob.
     //    Free-text variables are sanitized so untrusted input cannot execute
     //    as Jinja template code (see `prompts/README.md` security note).
-    let candidates_blob = candidates_to_yaml(&input.candidates);
+    //    The candidates_blob is also sanitized: candidate names/descriptions
+    //    are derived from crawled file content (untrusted), and a value like
+    //    `{{ 7 * 7 }}` would be evaluated as a Jinja expression when the
+    //    outer template is rendered. `sanitize_template_input` breaks the
+    //    `{{`/`}}` delimiters by inserting a space, which is safe for YAML
+    //    (YAML does not use `{{`/`}}` as syntax) and invisible to an LLM.
+    let candidates_blob = sanitize_template_input(&candidates_to_yaml(&input.candidates)?);
     let context = json!({
         "project_name": sanitize_template_input(&input.project_name),
         "module_summary": sanitize_template_input(&input.module_summary),
@@ -627,11 +633,20 @@ pub async fn identify_reduce(
 /// Produces a clean YAML list of [`CandidateAbstraction`]s (including
 /// `batch_idx` so the LLM can trace each candidate back to its originating
 /// batch). An empty candidate list serializes to `[]`.
-fn candidates_to_yaml(candidates: &[CandidateAbstraction]) -> String {
+///
+/// # Errors
+///
+/// Returns [`IdentifyError::Parse`] if `serde_yaml` fails to serialize the
+/// candidates. In practice [`CandidateAbstraction`] is a plain serializable
+/// struct so this never fails, but the `Result` return avoids silently
+/// swallowing a serialization error (which would send an empty blob to the
+/// LLM and produce misleading results).
+fn candidates_to_yaml(candidates: &[CandidateAbstraction]) -> Result<String, IdentifyError> {
     if candidates.is_empty() {
-        return "[]".to_string();
+        return Ok("[]".to_string());
     }
-    serde_yaml::to_string(candidates).unwrap_or_else(|_| "[]".to_string())
+    serde_yaml::to_string(candidates)
+        .map_err(|e| IdentifyError::Parse(format!("candidate serialization failed: {e}")))
 }
 
 /// Format the crawl inventory as the `file_listing` the template expects:
@@ -1676,7 +1691,7 @@ mod reduce_tests {
     #[test]
     fn candidates_to_yaml_produces_valid_yaml() {
         let candidates = sample_candidates();
-        let yaml = candidates_to_yaml(&candidates);
+        let yaml = candidates_to_yaml(&candidates).expect("should serialize");
         // Should parse back into the same number of candidates.
         let back: Vec<CandidateAbstraction> =
             serde_yaml::from_str(&yaml).expect("should parse back");
@@ -1687,7 +1702,78 @@ mod reduce_tests {
 
     #[test]
     fn candidates_to_yaml_empty_produces_empty_list() {
-        let yaml = candidates_to_yaml(&[]);
+        let yaml = candidates_to_yaml(&[]).expect("should serialize empty");
         assert_eq!(yaml.trim(), "[]");
+    }
+
+    #[test]
+    fn candidates_to_yaml_round_trips_special_yaml_chars() {
+        // Candidate names with special YAML characters should round-trip
+        // through serde_yaml without corruption.
+        let candidates = vec![
+            cand(
+                "name: with colon",
+                "desc # hash",
+                vec![0],
+                Tier::S,
+                "module",
+                0,
+            ),
+            cand("[bracketed]", "desc {braces}", vec![1], Tier::M, "class", 1),
+        ];
+        let yaml = candidates_to_yaml(&candidates).expect("should serialize");
+        let back: Vec<CandidateAbstraction> =
+            serde_yaml::from_str(&yaml).expect("should parse back");
+        assert_eq!(back.len(), 2);
+        assert_eq!(back[0].name, "name: with colon");
+        assert_eq!(back[0].description, "desc # hash");
+        assert_eq!(back[1].name, "[bracketed]");
+        assert_eq!(back[1].description, "desc {braces}");
+    }
+
+    #[tokio::test]
+    async fn candidates_blob_template_injection_is_sanitized() {
+        use std::sync::{Arc, Mutex};
+
+        struct CapturingClient {
+            captured: Arc<Mutex<String>>,
+        }
+        #[async_trait::async_trait]
+        impl LlmClient for CapturingClient {
+            async fn complete(&self, prompt: &str) -> Result<String, LlmError> {
+                *self.captured.lock().unwrap() = prompt.to_string();
+                Ok(canned_two_final_abstractions())
+            }
+        }
+
+        let captured: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+        let client = CapturingClient {
+            captured: captured.clone(),
+        };
+        let renderer = PromptRenderer::new().unwrap();
+        // A candidate with a Jinja injection payload in its name/description.
+        let candidates = vec![cand(
+            "{{ 7 * 7 }}",
+            "desc {{ evil }}",
+            vec![0],
+            Tier::S,
+            "module",
+            0,
+        )];
+        let input = sample_reduce_input(candidates);
+        let _ = identify_reduce(&client, &renderer, &input, None)
+            .await
+            .expect("should succeed");
+        let prompt = captured.lock().unwrap().clone();
+        // The raw `{{` / `}}` Jinja delimiters must NOT appear in the
+        // candidates_blob portion of the rendered prompt.
+        assert!(
+            !prompt.contains("{{ 7 * 7 }}"),
+            "candidate name not sanitized in prompt: {prompt}"
+        );
+        assert!(
+            !prompt.contains("{{ evil }}"),
+            "candidate description not sanitized in prompt: {prompt}"
+        );
     }
 }
