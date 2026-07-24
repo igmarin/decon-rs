@@ -12,6 +12,13 @@ use decon_core::{DEFAULT_EVAL_PASS_THRESHOLD, ModuleKey, TutorialFile, evaluate_
 use decon_crawl::crawl_local;
 use decon_pipeline::{DryRunError, dry_run};
 
+/// Success.
+const EXIT_OK: u8 = 0;
+/// Generic failure (including structural eval fail).
+const EXIT_FAIL: u8 = 1;
+/// Config / path / I/O input errors (best-practices exit table).
+const EXIT_CONFIG: u8 = 2;
+
 /// Deconstruct a codebase into an AI-generated tutorial.
 #[derive(Parser, Debug)]
 #[command(name = "decon", version, about, long_about = None)]
@@ -94,11 +101,11 @@ fn cmd_crawl(dir: &Path, format: OutputFormat) -> ExitCode {
                     println!("{v}");
                 }
             }
-            ExitCode::SUCCESS
+            ExitCode::from(EXIT_OK)
         }
         Err(e) => {
             eprintln!("error: crawl failed: {e}");
-            ExitCode::from(1)
+            ExitCode::from(EXIT_CONFIG)
         }
     }
 }
@@ -170,13 +177,14 @@ fn cmd_dry_run(dir: &Path, apps: &[String], format: OutputFormat) -> ExitCode {
                     println!("{v}");
                 }
             }
-            ExitCode::SUCCESS
+            ExitCode::from(EXIT_OK)
         }
         Err(e) => {
             eprintln!("error: dry-run failed: {e}");
             let code = match e {
-                DryRunError::Crawl(_) => 1,
-                DryRunError::Io { .. } | DryRunError::FileSizeOverflow { .. } => 2,
+                DryRunError::Crawl(_)
+                | DryRunError::Io { .. }
+                | DryRunError::FileSizeOverflow { .. } => EXIT_CONFIG,
             };
             ExitCode::from(code)
         }
@@ -188,7 +196,7 @@ fn cmd_eval(out: &Path, threshold: i32, format: OutputFormat) -> ExitCode {
         Ok(f) => f,
         Err(e) => {
             eprintln!("error: eval failed to load tutorial: {e}");
-            return ExitCode::from(1);
+            return ExitCode::from(EXIT_CONFIG);
         }
     };
     let report = evaluate_tutorial(&files, threshold);
@@ -224,9 +232,9 @@ fn cmd_eval(out: &Path, threshold: i32, format: OutputFormat) -> ExitCode {
         }
     }
     if report.passed {
-        ExitCode::SUCCESS
+        ExitCode::from(EXIT_OK)
     } else {
-        ExitCode::from(1)
+        ExitCode::from(EXIT_FAIL)
     }
 }
 
