@@ -662,6 +662,12 @@ apps = ["apps/alpha", "apps/beta"]
     }
 
     #[test]
+    fn yaml_nested_secret_rejected() {
+        let err = parse_yaml_config("llm:\n  api_key: xxx\n").unwrap_err();
+        assert_secret_rejected(err, "api_key");
+    }
+
+    #[test]
     fn toml_case_insensitive_api_key_rejected() {
         let err = parse_toml_config(r#"API_KEY = "xxx""#).unwrap_err();
         assert_secret_rejected(err, "API_KEY");
