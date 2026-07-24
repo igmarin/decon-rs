@@ -25,7 +25,7 @@ Still no live LLM spend. M3 (provider clients + map-reduce identify) is next.
 | **M0** — Spec Freeze | Workspace layout, CI, CONTRIBUTING, ADR 0001, prompt catalog, test fixtures, parity baseline | ✅ Done |
 | **M1** — Crawl + Dry-run + Eval | `decon crawl` / dry-run matching `baseline.json`; mermaid sanitize; setup-assessment parity; `decon eval` port | ✅ Done |
 | **M2** — Checkpoint, Config & Coverage | Content-addressed checkpoint (ADR 0001); `decon.toml`; ≥85% coverage gate | ✅ Done |
-| **M3** — LLM Identify | `LlmClient` trait + provider clients; map/reduce identify; checkpoint resume | 🔜 Next |
+| **M3** — LLM Identify | `LlmClient` trait + provider clients; map/reduce identify; checkpoint resume; Ctrl+C graceful shutdown | 🔜 Next (scoped: #62–#74) |
 | **M4** — Full Generate | Relationships → order → chapters → setup → overview → combine; Spanish chrome; `--each-app` | Planned |
 | **M5** — Product Polish | Installers, man page, shell completions, concurrency, error UX | Planned |
 
