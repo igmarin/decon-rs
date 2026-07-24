@@ -162,6 +162,7 @@ dependencies = [
  "decon-llm",
  "decon-pipeline",
  "predicates",
+ "serde_json",
 ]
 
 [[package]]
