@@ -349,6 +349,7 @@ dependencies = [
 name = "decon-pipeline"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "base64",
  "decon-core",
  "decon-crawl",
@@ -356,7 +357,9 @@ dependencies = [
  "flate2",
  "minijinja",
  "serde_json",
+ "serde_yaml",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
