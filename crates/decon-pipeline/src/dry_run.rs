@@ -105,20 +105,23 @@ pub fn dry_run_with_budget(
     let all_files = crawl.files;
     let modules = discover_modules(all_files.iter().map(String::as_str));
 
+    // Setup always uses the full inventory (baseline parity); evaluate before
+    // we possibly move `all_files` into the unscoped working set.
+    let readme_path = root.join("README.md");
+    let readme = fs::read_to_string(&readme_path).unwrap_or_default();
+    let setup = assess_setup(&readme, all_files.iter().map(String::as_str));
+
     let (files, filter_stats) = match scope {
         None => {
+            // Common path: move inventory — no clone.
             let stats = unscoped_filter_stats(all_files.len(), &modules);
-            (all_files.clone(), stats)
+            (all_files, stats)
         }
         Some(keys) => {
             let filtered = filter_files_by_scope(all_files.iter().map(String::as_str), keys);
             (filtered.files, filtered.stats)
         }
     };
-
-    let readme_path = root.join("README.md");
-    let readme = fs::read_to_string(&readme_path).unwrap_or_default();
-    let setup = assess_setup(&readme, all_files.iter().map(String::as_str));
 
     let budget = estimate_budget_for_files(root, &files, budget_config)?;
 
