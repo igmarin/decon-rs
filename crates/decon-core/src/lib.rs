@@ -13,6 +13,7 @@
 #![deny(missing_docs)]
 
 pub mod budget;
+pub mod config;
 pub mod diagrams;
 pub mod eval;
 pub mod mermaid;
@@ -26,6 +27,11 @@ pub use budget::{
     DEFAULT_MAX_FILE_CHARS, DEFAULT_MAX_FULL_FILES_PER_MODULE, FileSize, PATH_STUB_PREFIX,
     TRUNCATION_MARKER, TruncateResult, capped_file_chars, estimate_budget, path_stub,
     path_stub_chars, truncate_content,
+};
+pub use config::{
+    ConfigError, DEFAULT_CONFIG_CHARS_PER_TOKEN, DEFAULT_MAX_LLM_CALLS, RunConfig,
+    canonical_config_json, config_from_env_map, parse_toml_config, parse_yaml_config,
+    resolve_config,
 };
 pub use diagrams::{
     DiagramEdge, learning_path_flowchart, module_inventory_flowchart, module_inventory_from_counts,
