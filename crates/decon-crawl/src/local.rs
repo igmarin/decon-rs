@@ -1,4 +1,4 @@
-//! Local filesystem crawl: gitignore-aware inventory of relative paths.
+//! Local filesystem crawl: inventory of relative paths under a root.
 //!
 //! For Milestone 1, the walk matches the frozen fixture baseline
 //! (`tests/fixtures/baseline.json`):
@@ -7,7 +7,8 @@
 //! - Include **hidden files** (e.g. `.env.example`)
 //! - Emit relative POSIX paths (`/` separators), sorted lexicographically
 //!
-//! GitHub fetch is out of scope for this module.
+//! `.gitignore` support (via the `ignore` crate) is deferred; fixtures do not
+//! rely on it. GitHub fetch is out of scope for this module.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -49,8 +50,22 @@ pub enum CrawlError {
 /// Recursively inventory files under `root`.
 ///
 /// Returns sorted relative paths. Hidden directories are skipped; hidden
-/// files are included. Symlinks that resolve to files/dirs are followed
-/// (same as a plain `read_dir` walk).
+/// files are included.
+///
+/// ## Symlinks
+///
+/// Entries are classified with `Path::is_file` / `is_dir`, which **follow**
+/// symlinks (same as a plain `read_dir` walk). Inventory paths are always
+/// relative to `root` as discovered under the tree (the symlink’s path), never
+/// the absolute target path:
+///
+/// - A **file** symlink `leak.txt` → outside file is listed as `leak.txt`.
+/// - A **directory** symlink `out_link` → outside dir is descended into; files
+///   appear as `out_link/…` (still under `root` via the link path).
+///
+/// `strip_prefix` only fails for pathological entries whose `PathBuf` is not
+/// under `root`; those are omitted. Infinite symlink loops are not specially
+/// detected — do not crawl pathological trees.
 ///
 /// # Errors
 ///
@@ -208,5 +223,75 @@ mod tests {
     fn missing_path_errors() {
         let err = crawl_local("/nonexistent/decon-crawl-path-xyz").expect_err("missing");
         assert!(matches!(err, CrawlError::Io { .. }));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn file_symlink_listed_even_when_target_is_outside_root() {
+        use std::os::unix::fs::symlink;
+
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        let outside_file = outside.path().join("external.txt");
+        File::create(&outside_file)
+            .and_then(|mut f| f.write_all(b"external\n"))
+            .expect("outside file");
+
+        let root = tempfile::tempdir().expect("root tempdir");
+        File::create(root.path().join("inside.txt"))
+            .and_then(|mut f| f.write_all(b"inside\n"))
+            .expect("inside file");
+
+        // Symlink path lives under root; target is outside.
+        symlink(&outside_file, root.path().join("leak.txt")).expect("create symlink");
+
+        let result = crawl_local(root.path()).expect("crawl");
+        // Listed by symlink path under root (not the absolute outside path).
+        assert_eq!(
+            result.files,
+            vec!["inside.txt".to_owned(), "leak.txt".to_owned()]
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn dir_symlink_outside_root_listed_under_link_path() {
+        use std::os::unix::fs::symlink;
+
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        File::create(outside.path().join("secret.txt"))
+            .and_then(|mut f| f.write_all(b"secret\n"))
+            .expect("outside file");
+
+        let root = tempfile::tempdir().expect("root tempdir");
+        File::create(root.path().join("inside.txt"))
+            .and_then(|mut f| f.write_all(b"inside\n"))
+            .expect("inside file");
+        symlink(outside.path(), root.path().join("out_link")).expect("dir symlink");
+
+        let result = crawl_local(root.path()).expect("crawl");
+        // Content is inventoriable via the in-tree link path (not absolute outside).
+        assert_eq!(
+            result.files,
+            vec!["inside.txt".to_owned(), "out_link/secret.txt".to_owned(),]
+        );
+        assert!(!result.files.iter().any(|f| f.starts_with('/')));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlink_to_file_inside_root_is_included() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().expect("root tempdir");
+        let target = root.path().join("target.txt");
+        File::create(&target)
+            .and_then(|mut f| f.write_all(b"data\n"))
+            .expect("target");
+        symlink(&target, root.path().join("alias.txt")).expect("symlink");
+
+        let result = crawl_local(root.path()).expect("crawl");
+        // Both the real file and the symlink path appear as files under root.
+        assert!(result.files.contains(&"target.txt".to_owned()));
+        assert!(result.files.contains(&"alias.txt".to_owned()));
     }
 }
