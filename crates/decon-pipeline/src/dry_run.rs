@@ -21,7 +21,11 @@ pub struct DryRunPlan {
     pub root: PathBuf,
     /// Relative file inventory after optional scope filter (POSIX `/`).
     pub files: Vec<String>,
-    /// Module inventory derived from the **unscoped** crawl (baseline modules map).
+    /// Module inventory from the **unscoped** crawl (baseline `modules` map).
+    ///
+    /// Intentionally not re-scoped: baseline and setup assessment always see
+    /// the full-repo module layout; only [`Self::files`] / [`Self::budget`]
+    /// reflect `--apps` filtering.
     pub modules: Vec<ModuleCount>,
     /// Filter statistics for this run (unscoped or scoped).
     pub filter_stats: FilterStats,
@@ -31,7 +35,10 @@ pub struct DryRunPlan {
     pub budget: BudgetEstimate,
 }
 
-/// Errors while building a dry-run plan.
+/// Errors while building a dry-run plan (crawl failures or file I/O).
+///
+/// The CLI maps these to non-zero exit codes; library callers should treat
+/// them as terminal for the plan assembly step.
 #[derive(Debug, Error)]
 pub enum DryRunError {
     /// Local crawl failed.
@@ -68,8 +75,13 @@ pub enum DryRunError {
 /// use decon_pipeline::dry_run::dry_run;
 ///
 /// let plan = dry_run(".", None).expect("dry-run");
-/// assert!(plan.files.len() > 0);
-/// assert!(plan.budget.batch_count >= 1 || plan.files.is_empty());
+/// // Empty repos are valid: zero files and zero batches.
+/// assert_eq!(plan.budget.file_count, plan.files.len());
+/// if plan.files.is_empty() {
+///     assert_eq!(plan.budget.batch_count, 0);
+/// } else {
+///     assert!(plan.budget.batch_count >= 1);
+/// }
 /// ```
 pub fn dry_run(
     root: impl AsRef<Path>,
@@ -125,6 +137,9 @@ fn estimate_budget_for_files(
     files: &[String],
     config: &BudgetConfig,
 ) -> Result<BudgetEstimate, DryRunError> {
+    // TODO(perf): sizes are loaded with one `metadata` syscall per file.
+    // For large monorepos, fold size collection into `crawl_local` (or a
+    // bulk walk) so dry-run does not re-stat every path.
     let mut sizes: Vec<FileSize> = Vec::with_capacity(files.len());
     for rel in files {
         let full = root.join(rel);

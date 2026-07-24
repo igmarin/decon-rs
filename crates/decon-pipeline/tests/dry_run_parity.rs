@@ -136,10 +136,15 @@ fn assert_unscoped_fixture(name: &str) {
     assert_filter_stats(&plan.filter_stats, &base["filter_stats"]);
     assert_setup(&plan.setup, &base["setup_assessment"]);
 
-    // Budget smoke: deterministic, non-zero when files exist
+    // Budget smoke (not in baseline.json): sizes and batch packing.
     assert_eq!(plan.budget.file_count, plan.files.len());
-    assert!(plan.budget.raw_chars > 0);
-    assert!(plan.budget.batch_count >= 1);
+    if plan.files.is_empty() {
+        assert_eq!(plan.budget.raw_chars, 0);
+        assert_eq!(plan.budget.batch_count, 0);
+    } else {
+        assert!(plan.budget.raw_chars > 0);
+        assert!(plan.budget.batch_count >= 1);
+    }
 }
 
 #[test]
