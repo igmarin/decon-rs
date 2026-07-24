@@ -13,6 +13,7 @@
 #![deny(missing_docs)]
 
 pub mod budget;
+pub mod mermaid;
 pub mod module;
 pub mod scope;
 pub mod setup;
@@ -23,6 +24,11 @@ pub use budget::{
     DEFAULT_MAX_FILE_CHARS, DEFAULT_MAX_FULL_FILES_PER_MODULE, FileSize, PATH_STUB_PREFIX,
     TRUNCATION_MARKER, TruncateResult, capped_file_chars, estimate_budget, path_stub,
     path_stub_chars, truncate_content,
+};
+pub use mermaid::{
+    MAX_LABEL_CHARS, MAX_SEQUENCE_PARTICIPANTS, ValidateResult, participant_line, sanitize_label,
+    sanitize_markdown_mermaid_blocks, sanitize_mermaid, sequence_participant_lines, stable_node_id,
+    validate_mermaid,
 };
 pub use module::{ModuleCount, ModuleKey, ROOT_MODULE, discover_modules, module_key};
 pub use scope::{
