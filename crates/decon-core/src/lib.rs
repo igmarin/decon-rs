@@ -17,6 +17,7 @@ pub mod module;
 pub mod scope;
 pub mod setup;
 
+// Re-exports inherit rustdoc from `budget` (no extra crate-root docs required).
 pub use budget::{
     BudgetConfig, BudgetEstimate, DEFAULT_BATCH_CHAR_BUDGET, DEFAULT_CHARS_PER_TOKEN,
     DEFAULT_MAX_FILE_CHARS, DEFAULT_MAX_FULL_FILES_PER_MODULE, FileSize, PATH_STUB_PREFIX,

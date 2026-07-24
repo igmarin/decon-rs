@@ -143,8 +143,8 @@ pub fn truncate_content(content: &str, max_chars: usize) -> TruncateResult {
     }
 
     let marker_len = TRUNCATION_MARKER.chars().count();
-    let body_budget = max_chars.saturating_sub(marker_len.max(1).min(max_chars));
-    // If max_chars is smaller than marker, keep a tiny head only.
+    let body_budget = max_chars.saturating_sub(marker_len);
+    // If max_chars is smaller than the marker, keep a tiny head only.
     if body_budget == 0 {
         let head: String = content.chars().take(max_chars).collect();
         return TruncateResult {
@@ -184,10 +184,10 @@ pub fn path_stub(path: &str) -> String {
     format!("{PATH_STUB_PREFIX}{path}")
 }
 
-/// Character cost of a path-only stub for budgeting.
+/// Character cost of a path-only stub for budgeting (no allocation).
 #[must_use]
 pub fn path_stub_chars(path: &str) -> usize {
-    path_stub(path).chars().count()
+    PATH_STUB_PREFIX.chars().count() + path.chars().count()
 }
 
 /// Effective character contribution of one file after the per-file cap.
@@ -202,9 +202,10 @@ pub fn capped_file_chars(raw_chars: usize, max_file_chars: usize) -> usize {
 /// 1. Group files by module; within each module sort by path.
 /// 2. Keep up to `max_full_files_per_module` files as full (capped) bodies;
 ///    remaining files in the module become path stubs.
-/// 3. Pack modules (baseline order: `apps/*` → `_root` → others) into batches
-///    under `batch_char_budget`. A module that alone exceeds the budget still
-///    occupies its own batch and sets [`BudgetEstimate::oversized_batch`].
+/// 3. Pack modules in the same order as [`crate::discover_modules`]
+///    (`apps/*` → `_root` → others) into batches under `batch_char_budget`.
+///    A module that alone exceeds the budget still occupies its own batch and
+///    sets [`BudgetEstimate::oversized_batch`].
 ///
 /// # Examples
 ///
@@ -286,9 +287,10 @@ pub fn estimate_budget(files: &[FileSize], config: &BudgetConfig) -> BudgetEstim
         module_costs.push((key.clone(), cost, stubs));
     }
 
-    // Pack modules into batches.
-    let mut batch_count = 0;
-    let mut current = 0;
+    // Pack modules into batches (saturating arithmetic — overflow is not a
+    // realistic file inventory size, but stay explicit).
+    let mut batch_count = 0usize;
+    let mut current = 0usize;
     let mut oversized_batch = false;
 
     for (_key, cost, _) in &module_costs {
@@ -296,16 +298,15 @@ pub fn estimate_budget(files: &[FileSize], config: &BudgetConfig) -> BudgetEstim
             oversized_batch = true;
         }
         if batch_count == 0 {
-            // Start first batch.
             batch_count = 1;
             current = *cost;
             continue;
         }
         if current.saturating_add(*cost) > config.batch_char_budget {
-            batch_count += 1;
+            batch_count = batch_count.saturating_add(1);
             current = *cost;
         } else {
-            current += cost;
+            current = current.saturating_add(*cost);
         }
     }
 
@@ -358,6 +359,21 @@ mod tests {
         assert!(r.text.starts_with('H'));
         assert!(r.text.ends_with('T'));
         assert_eq!(r.original_chars, 100);
+    }
+
+    #[test]
+    fn truncate_counts_unicode_scalar_values_not_bytes() {
+        // Each emoji is one char but multiple bytes.
+        let content = "😀".repeat(40);
+        assert_eq!(content.chars().count(), 40);
+        assert!(content.len() > 40);
+        let max_chars = 24; // larger than TRUNCATION_MARKER so head+marker+tail is used
+        let r = truncate_content(&content, max_chars);
+        assert!(r.truncated);
+        assert_eq!(r.original_chars, 40);
+        assert!(r.text.contains(TRUNCATION_MARKER));
+        // Result is head + marker + tail with body budget max_chars - marker.
+        assert_eq!(r.text.chars().count(), max_chars);
     }
 
     #[test]
@@ -437,14 +453,12 @@ mod tests {
         ];
         let est = estimate_budget(&files, &cfg);
         assert_eq!(est.stubbed_file_count, 2);
-        // Two full at 10 + two stubs
-        let stub = path_stub_chars("src/c.rs"); // same length pattern for c and d
+        // Two full at 10 + two path stubs (sorted: a,b full; c,d stub).
         assert_eq!(
             est.budgeted_chars,
             10 + 10 + path_stub_chars("src/c.rs") + path_stub_chars("src/d.rs")
         );
         assert_eq!(est.batch_count, 1);
-        let _ = stub;
     }
 
     #[test]
