@@ -22,3 +22,4 @@ target
 .rs-guard/
 review-result.txt
 rs-guard-metrics.json
+.rs-guard/cache/

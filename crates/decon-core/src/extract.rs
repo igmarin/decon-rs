@@ -369,6 +369,15 @@ mod tests {
     }
 
     #[test]
+    fn bare_json_with_escaped_quotes_in_string() {
+        let input = "{\"msg\": \"he said \\\"hello\\\"\"}";
+        assert_eq!(
+            extract_json_block(input).unwrap(),
+            "{\"msg\": \"he said \\\"hello\\\"\"}"
+        );
+    }
+
+    #[test]
     fn unbalanced_json_fence() {
         let input = "```json\n{\"name\": \"foo\"}";
         assert_eq!(
