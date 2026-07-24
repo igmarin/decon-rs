@@ -7,8 +7,13 @@
 //! and the independent regenerator heuristics:
 //!
 //! - Root-level files (no `/`) map to [`ModuleKey::ROOT`] (`_root`).
-//! - Paths under `apps/<name>/…` map to `apps/<name>` (two-level umbrella key).
+//! - Paths under `apps/<name>/…` (at least three components) map to
+//!   `apps/<name>` (two-level umbrella key).
+//! - Files directly under `apps/` (e.g. `apps/README.md`) map to `apps`.
 //! - All other paths map to their first path component (e.g. `src/…` → `src`).
+//!
+//! A bare filename of `apps` (single component) is treated as a root-level
+//! file and maps to `_root`, consistent with the “no `/` → `_root`” rule.
 //!
 //! Inventory ordering is: all `apps/*` keys (alphabetically), then `_root`,
 //! then remaining keys alphabetically.
@@ -85,18 +90,28 @@ pub struct ModuleCount {
 /// ```
 #[must_use]
 pub fn module_key(path: &str) -> ModuleKey {
-    let components: Vec<&str> = path.split('/').collect();
-    if components.len() == 1 {
-        ModuleKey::new(ROOT_MODULE)
-    } else if components[0] == "apps" {
-        // Two-level umbrella key: apps/<name>
-        ModuleKey::new(format!("apps/{}", components[1]))
-    } else {
-        ModuleKey::new(components[0])
+    let mut parts = path.split('/');
+    let Some(first) = parts.next() else {
+        return ModuleKey::new(ROOT_MODULE);
+    };
+    let second = parts.next();
+    // True when the path has a third (or further) component.
+    let has_nested = parts.next().is_some();
+
+    match (first, second, has_nested) {
+        // Single component (including a bare file named `apps`) → `_root`.
+        (_, None, _) => ModuleKey::new(ROOT_MODULE),
+        // Umbrella app: `apps/<name>/…` requires at least three components so
+        // `apps/README.md` is not misclassified as app "README.md".
+        ("apps", Some(name), true) => ModuleKey::new(format!("apps/{name}")),
+        // File or dir directly under `apps/` (e.g. `apps/README.md`).
+        ("apps", Some(_), false) => ModuleKey::new("apps"),
+        // Any other top-level directory.
+        (dir, Some(_), _) => ModuleKey::new(dir),
     }
 }
 
-/// Sort priority for module keys: `apps/*` first, then `_root`, then others.
+/// Priority group for inventory ordering: `0 = apps/*`, `1 = _root`, `2 = other`.
 fn module_sort_key(key: &str) -> (u8, &str) {
     if key.starts_with("apps/") {
         (0, key)
@@ -125,10 +140,10 @@ fn module_sort_key(key: &str) -> (u8, &str) {
 /// assert_eq!(inv[1].count, 2);
 /// ```
 #[must_use]
-pub fn discover_modules<'a, I, S>(files: I) -> Vec<ModuleCount>
+pub fn discover_modules<I, S>(files: I) -> Vec<ModuleCount>
 where
     I: IntoIterator<Item = S>,
-    S: AsRef<str> + 'a,
+    S: AsRef<str>,
 {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for file in files {
@@ -164,6 +179,19 @@ mod tests {
         assert_eq!(module_key("apps/alpha/lib/alpha.ex").as_str(), "apps/alpha");
         assert_eq!(module_key("apps/beta/mix.exs").as_str(), "apps/beta");
         assert_eq!(module_key("apps/gamma/lib/gamma.ex").as_str(), "apps/gamma");
+    }
+
+    #[test]
+    fn module_key_file_directly_under_apps_is_apps_not_app_name() {
+        // Regression: do not treat `apps/README.md` as umbrella app "README.md".
+        assert_eq!(module_key("apps/README.md").as_str(), "apps");
+        assert_eq!(module_key("apps/mix.exs").as_str(), "apps");
+    }
+
+    #[test]
+    fn module_key_bare_apps_filename_is_root() {
+        // Single path component named `apps` is a root-level file, not an app.
+        assert_eq!(module_key("apps").as_str(), ModuleKey::ROOT);
     }
 
     #[test]

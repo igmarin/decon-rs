@@ -141,14 +141,17 @@ fn crawl_dir(root: &Path, dir: &Path, files: &mut Vec<String>) {
 /// Determine the module key for a file path.
 ///
 /// - Root-level files → `_root`
-/// - `apps/<name>/…` → `apps/<name>` (umbrella two-level key)
+/// - `apps/<name>/…` (3+ components) → `apps/<name>` (umbrella two-level key)
+/// - Files directly under `apps/` (e.g. `apps/README.md`) → `apps`
 /// - `<dir>/…` → `<dir>` (top-level directory name)
 fn module_key(path: &str) -> String {
     let components: Vec<&str> = path.split('/').collect();
     if components.len() == 1 {
         "_root".to_string()
-    } else if components[0] == "apps" {
+    } else if components[0] == "apps" && components.len() >= 3 {
         format!("apps/{}", components[1])
+    } else if components[0] == "apps" {
+        "apps".to_string()
     } else {
         components[0].to_string()
     }
