@@ -20,7 +20,10 @@ pub mod resume;
 
 pub use checkpoint_store::{CheckpointStore, CheckpointStoreError, records_from_files};
 pub use dry_run::{DryRunError, DryRunPlan, dry_run, dry_run_with_budget};
-pub use identify::{IdentifyError, IdentifySingleShotInput, identify_single_shot};
+pub use identify::{
+    CandidateAbstraction, CandidateBatch, IdentifyError, IdentifyMapInput, IdentifySingleShotInput,
+    identify_map, identify_single_shot,
+};
 pub use prompts::{PromptError, PromptId, PromptRenderer, sanitize_template_input};
 pub use resume::{
     ResumeIdentityMismatch, check_identity, invalidate_from, next_stage, pending_stages, should_run,

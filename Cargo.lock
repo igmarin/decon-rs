@@ -357,6 +357,7 @@ dependencies = [
  "decon-llm",
  "flate2",
  "minijinja",
+ "serde",
  "serde_json",
  "serde_yaml",
  "thiserror",
